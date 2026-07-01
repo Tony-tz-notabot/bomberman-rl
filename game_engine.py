@@ -159,7 +159,9 @@ class GameEngine:
         if p.input_right: dx += 1
         count = (p.input_up + p.input_down + p.input_left + p.input_right)
         if count > 2:
+            p.dir_x, p.dir_y = 0, 0
             return 0, 0
+        p.dir_x, p.dir_y = dx, dy
         return dx, dy
 
     def _move_player(self, p, vx_ps, vy_ps):
@@ -647,6 +649,7 @@ class GameEngine:
                 perm_blast_plus=p.perm_blast_plus,
                 perm_speed_plus=p.perm_speed_plus,
                 abilities=dict(p.abilities),
+                dir_x=p.dir_x, dir_y=p.dir_y,
             )
 
         # Bomb snapshots
@@ -679,4 +682,6 @@ class GameEngine:
             buffs=tuple(_bufsnap(b) for b in self.buffs),
             explosion_cells=tuple(self.explosion_cells),
             scores={"red": self.red_player.wins, "blue": self.blue_player.wins},
+            current_winner=self.current_winner,
+            round_delay_timer=self.round_delay_timer,
         )

@@ -33,6 +33,8 @@ class Player:
         self.input_ignite = False
         self.vx = 0.0
         self.vy = 0.0
+        self.dir_x = 0
+        self.dir_y = 1
 
     def reset(self, spawn_x, spawn_y):
         self.pos_x, self.pos_y = grid_center(spawn_x, spawn_y)
@@ -50,6 +52,8 @@ class Player:
         self.remote_queue.clear()
         self.vx = 0.0
         self.vy = 0.0
+        self.dir_x = 0
+        self.dir_y = 1
         self.input_up = self.input_down = self.input_left = self.input_right = False
         self.input_action = False
         self.input_ignite = False
@@ -110,6 +114,8 @@ class PlayerSnapshot:
     perm_blast_plus: int
     perm_speed_plus: int
     abilities: dict  # {name: remaining_frames}
+    dir_x: int = 0
+    dir_y: int = 1
     # ⚠️ excludes: unknown_subtype, remote_queue, input_*, vx, vy, prev_action
 
 
@@ -147,3 +153,5 @@ class GameSnapshot:
     buffs: tuple            # (BuffItemSnapshot, ...)
     explosion_cells: tuple  # ((gx, gy), ...)
     scores: dict            # {"red": int, "blue": int}
+    current_winner: str = ""
+    round_delay_timer: int = 0
