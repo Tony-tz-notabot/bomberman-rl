@@ -3,8 +3,8 @@ import random
 import math
 from config import cfg
 from constants import GameState, COLOR_RED, COLOR_BLUE
-from utils import pixel_to_grid, grid_center, grid_to_pixel, sign, \
-    box_overlap, clamp, get_map_width, get_window_height
+from utils import pixel_to_grid, grid_center, sign, \
+    box_overlap, get_map_width, get_window_height
 from models import Player, Bomb, BuffItem, \
     GameSnapshot, PlayerSnapshot, BombSnapshot, BuffItemSnapshot
 
