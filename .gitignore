@@ -18,6 +18,9 @@ CLAUDE.md
 .claude/
 whole-branch-review.diff
 
+# Design docs (local planning artifacts)
+docs/
+
 # IDE
 .vscode/
 .idea/
