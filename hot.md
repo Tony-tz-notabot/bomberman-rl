@@ -27,34 +27,17 @@
 - [x] **Task 5: 创建 game_engine.py** — 创建纯逻辑 GameEngine 类 (~440行)，零 pygame 依赖。包含完整游戏逻辑：地图生成、玩家移动/碰撞、炸弹放置/踢飞/定时器、爆炸 BFS 连锁、死亡/护盾、Buff 拾取/刷新、6种能力计时器（kick/remote/shield/diarrhea/reverse/float）、得分/回合生命周期。所有定时器帧基（int），移动使用 DT_OVER_DTAU。创建 smoke test，99 现有测试全部通过。
 - [x] **Task 6: BombermanGame 委托 GameEngine** — BombermanGame 移除所有重复游戏逻辑，创建 `self.engine = GameEngine()` 并委托全部状态和更新逻辑。GameEngine 通过动作字典驱动 (`step(p1_actions, p2_actions)`)。渲染代码保持不动。测试全部 99 通过。
 - [x] **Task 7: 提取 renderer.py** — 创建独立渲染模块 Renderer 类（380 行），所有绘制函数从 main.py 移至 renderer.py。Renderer 以 GameSnapshot 只读 dataclass 为唯一数据源，零引擎耦合。适配要点：`self.grid[x][y]` → CellType 常量解码 (CELL_EMPTY/STONE/BRICK/BUFF/BOMB/EXPLOSION)、玩家方向眼睛 `self.get_input_direction(p)` → `ps.dir_x/dir_y` 快照字段、获取胜利画面 / 回合延迟覆盖层通过 `snap.state`/`snap.current_winner`/`snap.round_delay_timer`。维护全部视觉特效：死亡渐隐、护盾光圈闪烁、炸弹引信闪烁、爆炸强度随机。GameSnapshot 新增 `current_winner` 和 `round_delay_timer` 字段，PlayerSnapshot 新增 `dir_x`/`dir_y`。`get_snapshot()` 更新填充这些字段。主流程 `render()` 简化为调用 `self.renderer.draw(snapshot)`。测试全部 99 通过，游戏运行视觉一致。
+- [x] **Task 10: main.py 精简为胶水代码** — main.py 从 1250 行精简至 138 行，仅导入模块+主循环，无游戏逻辑
+- [x] **Task 11: 最终验证** — 99 测试全通过，GameEngine 零 pygame 依赖验证通过，smoke test 移除，gitignore 添加
 
 ## 🚧 当前进度
 
-**阶段：AI 系统加入前的结构性重构 — 已完成 Task 1-9**
+**阶段：AI 系统加入前的结构性重构 — 全部 11 个 Task 完成 ✅**
 
 ## 📋 下一步计划
 
-### 1. 代码模块化重构 (第一阶段)
-将 `main.py` 拆分为以下模块：
-
-| 模块 | 职责 | 状态 |
-|------|------|------|
-| `config.py` | Config 类、全局 cfg 实例、全部可调参数 | ✅ |
-| `constants.py` | 颜色常量、游戏常量 + GameState 枚举 | ✅ |
-| `utils.py` | 坐标工具 (grid↔pixel)、clamp、sign、box_overlap | ✅ |
-| `models.py` | Player、Bomb、BuffItem 数据类 + Snapshot 类型 | ✅ |
-| `game_state.py` | GameState 枚举 | (合并到 constants) |
-| `game_engine.py` | 纯逻辑引擎（独立于 pygame） | ✅ |
-| `renderer.py` | 所有绘制函数（地图、UI、玩家、炸弹、爆炸等） | ✅ |
-| `input_handler.py` | 键盘输入映射、按键状态同步 | ✅ |
-| `settings_ui.py` | 设置面板参数列表绘制与交互 | ✅ |
-
-### 2. AI 系统设计 (第二阶段)
-- 确定 AI 接入点：AI 控制一名玩家的输入 (move/place bomb/ignite)
-- 设计 AI 接口 / 抽象类
-- 支持两种 AI 模式：取代玩家操作 或 作为独立玩家对战
-
-### 3. AI 实现 (第三阶段)
-- 简单策略：随机移动 + 随机放炸弹 (baseline)
-- 进阶策略：基于状态的规则 AI (寻路、躲避爆炸、寻找道具)
-- 后续可扩展：强化学习 / 搜索算法
+### Phase 2: Gym 环境封装
+- 创建 BombermanEnv(gym.Env) 封装 GameEngine
+- 定义 observation_space / action_space
+- 实现 reset() / step() / render()
+- 支持 reward 计算
