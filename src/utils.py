@@ -1,4 +1,4 @@
-from config import cfg
+from src.config import cfg
 
 
 def grid_to_pixel(x, y):

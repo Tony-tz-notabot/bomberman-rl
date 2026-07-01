@@ -32,14 +32,14 @@ def _reset_cfg():
     Many tests implicitly depend on default config values (CELL_SIZE=40,
     MAP_COLS=19, MAP_ROWS=11, etc.).  This fixture guarantees a clean slate.
     """
-    from main import cfg
+    from src.main import cfg
     cfg.reset_defaults()
 
 
 @pytest.fixture
 def cfg():
     """Expose the global config instance (already reset to defaults)."""
-    from main import cfg
+    from src.main import cfg
     return cfg
 
 
@@ -50,6 +50,6 @@ def game():
     After this fixture the game is in ``ROUND_RUNNING`` state with a
     freshly generated map and both players spawned.
     """
-    from main import BombermanGame
+    from src.main import BombermanGame
     g = BombermanGame()
     return g

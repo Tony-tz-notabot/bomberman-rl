@@ -3,8 +3,8 @@
 import pygame
 import random
 import math
-from config import cfg
-from constants import (
+from src.config import cfg
+from src.constants import (
     COLOR_BG, COLOR_FLOOR, COLOR_STONE, COLOR_BRICK,
     COLOR_RED, COLOR_BLUE, COLOR_BOMB_BODY, COLOR_BOMB_FUSE,
     COLOR_EXPLOSION, COLOR_TEXT, COLOR_UI_BAR_BG, COLOR_SHIELD,
@@ -14,8 +14,8 @@ from constants import (
     GameState,
     CELL_EMPTY, CELL_STONE, CELL_BRICK, CELL_BUFF, CELL_BOMB, CELL_EXPLOSION,
 )
-from utils import grid_to_pixel, grid_center, get_map_width, get_window_height
-from models import GameSnapshot
+from src.utils import grid_to_pixel, grid_center, get_map_width, get_window_height
+from src.models import GameSnapshot
 
 
 class Renderer:

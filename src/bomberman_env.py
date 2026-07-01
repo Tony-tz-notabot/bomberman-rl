@@ -4,11 +4,11 @@ import gym
 from gym import spaces
 from typing import Callable, Optional, Tuple
 
-from config import cfg
-from constants import GameState, CELL_EMPTY, CELL_STONE, CELL_BRICK
-from game_engine import GameEngine
-from models import GameSnapshot
-from utils import grid_center, pixel_to_grid
+from src.config import cfg
+from src.constants import GameState, CELL_EMPTY, CELL_STONE, CELL_BRICK
+from src.game_engine import GameEngine
+from src.models import GameSnapshot
+from src.utils import grid_center, pixel_to_grid
 
 # Type alias for opponent function
 OpponentFn = Callable[[GameSnapshot, str], np.ndarray]

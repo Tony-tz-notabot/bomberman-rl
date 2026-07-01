@@ -18,7 +18,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.callbacks import EvalCallback
 
-from bomberman_env import BombermanEnv
+from src.bomberman_env import BombermanEnv
 from rewards.sparse import SparseReward
 
 

@@ -4,19 +4,19 @@ bomberman version 2.0.2
 import pygame
 import sys
 
-from config import cfg
+from src.config import cfg
 
-from utils import (
+from src.utils import (
     get_window_width, get_window_height,
 )
-from constants import (
+from src.constants import (
     COLOR_BG,
     GameState,
 )
-from game_engine import GameEngine
-from renderer import Renderer
-from input_handler import InputHandler
-from settings_ui import SettingsUI
+from src.game_engine import GameEngine
+from src.renderer import Renderer
+from src.input_handler import InputHandler
+from src.settings_ui import SettingsUI
 
 # ==================== 主游戏类 ====================
 class BombermanGame:

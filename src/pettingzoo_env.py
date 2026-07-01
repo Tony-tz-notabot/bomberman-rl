@@ -7,10 +7,10 @@ import numpy as np
 from gym import spaces
 from pettingzoo import ParallelEnv
 
-from config import cfg
-from constants import GameState
-from game_engine import GameEngine
-from bomberman_env import build_obs
+from src.config import cfg
+from src.constants import GameState
+from src.game_engine import GameEngine
+from src.bomberman_env import build_obs
 from rewards import RewardFunction
 from rewards.sparse import SparseReward
 

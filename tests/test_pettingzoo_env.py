@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from config import cfg
+from src.config import cfg
 
 
 class TestPettingZooEnv:

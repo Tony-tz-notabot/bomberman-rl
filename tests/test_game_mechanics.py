@@ -3,12 +3,12 @@ abilities, buffs, player movement, scoring."""
 
 import pytest
 
-from config import cfg as global_cfg
-from constants import GameState
-from models import Player, Bomb, BuffItem
-from utils import grid_center, pixel_to_grid
-from main import BombermanGame
-from game_engine import GameEngine
+from src.config import cfg as global_cfg
+from src.constants import GameState
+from src.models import Player, Bomb, BuffItem
+from src.utils import grid_center, pixel_to_grid
+from src.main import BombermanGame
+from src.game_engine import GameEngine
 
 
 # ====================================================================

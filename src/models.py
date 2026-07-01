@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from config import cfg
-from utils import pixel_to_grid, grid_center
+from src.config import cfg
+from src.utils import pixel_to_grid, grid_center
 
 
 # ── Internal data classes (unchanged from original) ──

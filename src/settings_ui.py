@@ -1,9 +1,9 @@
 # settings_ui.py — settings overlay panel
 
 import pygame
-from config import cfg
-from constants import COLOR_TEXT
-from utils import get_window_width, get_window_height
+from src.config import cfg
+from src.constants import COLOR_TEXT
+from src.utils import get_window_width, get_window_height
 
 
 class SettingsUI:

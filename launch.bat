@@ -29,15 +29,15 @@ if %errorlevel% neq 0 (
 cd /d "%~dp0"
 
 :: Verify main.py exists
-if not exist "main.py" (
+if not exist "src\main.py" (
     echo main.py not found.
-    echo Please place this launcher in the same folder as main.py.
+    echo Please place this launcher in the same folder as src\main.py.
     pause
     exit /b 1
 )
 
 echo Starting Bomberman PVP...
-python main.py
+python src\main.py
 
 :: Keep the window open if the game closes unexpectedly
 pause

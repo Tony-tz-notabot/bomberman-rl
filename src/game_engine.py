@@ -1,12 +1,12 @@
 # game_engine.py
 import random
 import math
-from config import cfg
-from constants import GameState, COLOR_RED, COLOR_BLUE, \
+from src.config import cfg
+from src.constants import GameState, COLOR_RED, COLOR_BLUE, \
     CELL_EMPTY, CELL_STONE, CELL_BRICK, CELL_BUFF, CELL_BOMB, CELL_EXPLOSION
-from utils import pixel_to_grid, grid_center, sign, \
+from src.utils import pixel_to_grid, grid_center, sign, \
     box_overlap, get_map_width, get_window_height
-from models import Player, Bomb, BuffItem, \
+from src.models import Player, Bomb, BuffItem, \
     GameSnapshot, PlayerSnapshot, BombSnapshot, BuffItemSnapshot
 
 

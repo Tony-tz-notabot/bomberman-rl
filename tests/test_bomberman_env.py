@@ -2,9 +2,9 @@
 import numpy as np
 import pytest
 
-from config import cfg
-from constants import GameState
-from bomberman_env import BombermanEnv, build_obs
+from src.config import cfg
+from src.constants import GameState
+from src.bomberman_env import BombermanEnv, build_obs
 
 
 class TestBombermanEnv:

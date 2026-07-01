@@ -1,6 +1,6 @@
 """SparseReward: +1 win, -1 lose, 0 draw, 0 otherwise."""
 from rewards import RewardFunction
-from constants import GameState
+from src.constants import GameState
 
 
 class SparseReward(RewardFunction):
