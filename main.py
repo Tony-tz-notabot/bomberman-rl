@@ -21,31 +21,15 @@ def get_window_width():
 def get_window_height():
     return get_map_height() + cfg.UI_BAR_HEIGHT
 
-# ==================== 颜色常量 ====================
-COLOR_BG = (34, 40, 49)
-COLOR_FLOOR = (200, 200, 200)
-COLOR_STONE = (80, 80, 80)
-COLOR_BRICK = (205, 133, 63)
-COLOR_RED = (220, 50, 50)
-COLOR_BLUE = (50, 100, 220)
-COLOR_BOMB_BODY = (30, 30, 30)
-COLOR_BOMB_FUSE = (255, 200, 0)
-COLOR_EXPLOSION = (255, 100, 0)
-COLOR_TEXT = (255, 255, 255)
-COLOR_UI_BAR_BG = (20, 20, 30)
-COLOR_SHIELD = (0, 255, 255)
-
-BUFF_BOMB_COLOR = (255, 100, 0)
-BUFF_BLAST_COLOR = (255, 200, 0)
-BUFF_SPEED_COLOR = (0, 200, 100)
-BUFF_UNKNOWN_COLOR = (180, 100, 255)
-
-ABILITY_KICK_COLOR = (220, 80, 80)
-ABILITY_REMOTE_COLOR = (80, 140, 240)
-ABILITY_SHIELD_COLOR = (0, 220, 100)
-ABILITY_DIARRHEA_COLOR = (139, 90, 43)
-ABILITY_REVERSE_COLOR = (180, 100, 255)
-ABILITY_FLOAT_COLOR = (160, 160, 160)
+from constants import (
+    COLOR_BG, COLOR_FLOOR, COLOR_STONE, COLOR_BRICK,
+    COLOR_RED, COLOR_BLUE, COLOR_BOMB_BODY, COLOR_BOMB_FUSE,
+    COLOR_EXPLOSION, COLOR_TEXT, COLOR_UI_BAR_BG, COLOR_SHIELD,
+    BUFF_BOMB_COLOR, BUFF_BLAST_COLOR, BUFF_SPEED_COLOR, BUFF_UNKNOWN_COLOR,
+    ABILITY_KICK_COLOR, ABILITY_REMOTE_COLOR, ABILITY_SHIELD_COLOR,
+    ABILITY_DIARRHEA_COLOR, ABILITY_REVERSE_COLOR, ABILITY_FLOAT_COLOR,
+    GameState,
+)
 
 # ==================== 坐标工具 ====================
 def grid_to_pixel(x, y):
@@ -155,15 +139,6 @@ class BuffItem:
 
     def grid_pos(self):
         return pixel_to_grid(self.pos_x, self.pos_y)
-
-# ==================== 游戏状态枚举 ====================
-class GameState:
-    MENU = 0
-    ROUND_RUNNING = 1
-    ROUND_END_DELAY = 2
-    MATCH_END = 3
-    SETTINGS = 4
-    SETTINGS_PAUSED = 5
 
 # ==================== 主游戏类 ====================
 class BombermanGame:
