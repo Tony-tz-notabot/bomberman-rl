@@ -135,10 +135,12 @@ class RewardFunction:
         engine,          # GameEngine — 完整内部状态
         prev_snapshot,   # GameSnapshot | None — 上一帧快照
         snapshot,        # GameSnapshot — 当前帧快照
-        action,          # dict — 智能体刚执行的动作
+        action,          # np.ndarray(6,) — MultiBinary(6) 原始动作
         agent_id: str,   # "red" | "blue"
     ) -> float:
-        """返回该帧的奖励值。"""
+        """返回该帧的奖励值。
+        action 是 MultiBinary(6): [up, down, left, right, action, ignite]
+        """
         raise NotImplementedError
 ```
 
@@ -311,7 +313,7 @@ class BombermanPettingZooEnv(ParallelEnv):
 
 ### 观察视角 — 自/他对调
 
-单智能体和 PettingZoo 使用同一套观察构建函数 `_build_obs(snapshot, agent_id)`。
+单智能体和 PettingZoo 使用同一套观察构建函数 `build_obs(snapshot, agent_id)`（模块级函数）。
 
 **核心原则：CH1 总是编码"自己在前，对手在后"，确保共享策略（tied policy）可直接使用。**
 
@@ -380,7 +382,7 @@ def step(self, actions: dict):
     return obs, rewards, terminated, truncated, infos
 ```
 
-`build_obs()` 是 `bomberman_env.py` 中的模块级函数，被 BombermanEnv 和 BombermanPettingZooEnv 共同引用。
+`build_obs()` 是模块级函数（`bomberman_env.py` 顶层），被 BombermanEnv 和 BombermanPettingZooEnv 共同引用。
 
 与 BombermanEnv.step 的关系：
 

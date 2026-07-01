@@ -32,12 +32,46 @@
 
 ## 🚧 当前进度
 
-**阶段：AI 系统加入前的结构性重构 — 全部 11 个 Task 完成 ✅**
+**阶段：Phase 2 — Gym 环境封装 — 全部完成 ✅**
+
+### 2026-07-01
+- [x] **Phase 2: Gym 环境封装全部完成**
+  - 设计文档: `docs/superpowers/specs/2026-07-01-bomberman-gym-env-design.md` (设计锁定并提交)
+  - `rewards/__init__.py` — RewardFunction 基类 (ABC, reset/__call__)
+  - `rewards/sparse.py` — SparseReward (+1/-1/0 稀疏奖励)
+  - `bomberman_env.py` — BombermanEnv(gym.Env) 单智能体环境
+    - 8 通道观察空间 Box(0,1,(11,19,8)): 地形/玩家高斯热力图/炸弹引信/Buff+爆炸/双能力广播/双方状态
+    - 动作空间 MultiBinary(6) + 对向键惩罚
+    - build_obs() 模块级函数（PettingZoo 复用）
+    - reset(options={"grid": matrix}) 矩阵初始化 + 默认随机回退
+    - opponent_fn 函数参数控制蓝方
+    - RewardFunction 适配器可插拔
+  - `pettingzoo_env.py` — BombermanPettingZooEnv(ParallelEnv) 多智能体环境
+    - 直接包装 GameEngine，绕过 opponent_fn
+    - 从 bomberman_env 导入 build_obs 作共享观察构建器
+    - 支持 tied policy（自/他对调通道编码）
+  - 测试: 8 个 Gym 测试 + 4 个 PettingZoo 测试，合计 112 测试全部通过
+  - 示例: `examples/train_with_sb3.py` — PPO/CnnPolicy 训练脚本
+
+### 新文件
+```
+├── bomberman_env.py              # Gym.Env 单智能体 (260 行)
+├── pettingzoo_env.py             # PettingZoo ParallelEnv (185 行)
+├── rewards/
+│   ├── __init__.py                # RewardFunction 基类
+│   └── sparse.py                  # 稀疏奖励示例
+├── tests/
+│   ├── test_bomberman_env.py      # 8 个测试
+│   └── test_pettingzoo_env.py     # 4 个测试
+└── examples/
+    └── train_with_sb3.py          # SB3 训练示例
+```
 
 ## 📋 下一步计划
 
-### Phase 2: Gym 环境封装
-- 创建 BombermanEnv(gym.Env) 封装 GameEngine
-- 定义 observation_space / action_space
-- 实现 reset() / step() / render()
-- 支持 reward 计算
+### Phase 3: 训练基础设施与自对弈
+- 实现多个自定义 RewardFunction（距离奖励、击杀奖励、探索奖励等）
+- 实现 scripted 对手策略（随机、站立、近战、逃跑等）
+- 实现 SB3 训练管道：PPO → 保存 → 评估 → 回放
+- 实现自对弈训练循环（PettingZoo + SB3 多智能体）
+- 对战录像和分析工具
