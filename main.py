@@ -69,10 +69,12 @@ class BombermanGame:
             if event.type == pygame.QUIT:
                 self.running = False
             elif event.type == pygame.KEYDOWN:
-                self.input_handler.press(event.key)
+                if self.engine.state in (GameState.ROUND_RUNNING, GameState.ROUND_END_DELAY):
+                    self.input_handler.press(event.key)
                 self._check_menu_key(event.key)
             elif event.type == pygame.KEYUP:
-                self.input_handler.release(event.key)
+                if self.engine.state in (GameState.ROUND_RUNNING, GameState.ROUND_END_DELAY):
+                    self.input_handler.release(event.key)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if self.state in (GameState.SETTINGS, GameState.SETTINGS_PAUSED):
                     self.handle_settings_click(event.pos)
