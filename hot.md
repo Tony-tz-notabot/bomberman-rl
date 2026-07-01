@@ -50,6 +50,7 @@
     - 直接包装 GameEngine，绕过 opponent_fn
     - 从 bomberman_env 导入 build_obs 作共享观察构建器
     - 支持 tied policy（自/他对调通道编码）
+  - bugfix: CH1 玩家编码 — np.maximum 导致对手基线 0.6 覆盖自身位置，改为 np.where(self_heat >= opp_heat) 实现自身[0.1,0.5]/对手(0.5,1.0] 正确分离
   - 测试: 8 个 Gym 测试 + 4 个 PettingZoo 测试，合计 112 测试全部通过
   - 示例: `examples/train_with_sb3.py` — PPO/CnnPolicy 训练脚本
 
