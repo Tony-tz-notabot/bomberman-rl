@@ -266,22 +266,22 @@ class TestGameState:
 
 class TestBoxOverlap:
     def test_overlapping(self):
-        from main import BombermanGame
-        assert BombermanGame.box_overlap(0, 10, 0, 10, 5, 15, 5, 15) is True
+        from utils import box_overlap
+        assert box_overlap(0, 10, 0, 10, 5, 15, 5, 15) is True
 
     def test_non_overlapping_x(self):
-        from main import BombermanGame
-        assert BombermanGame.box_overlap(0, 10, 0, 10, 20, 30, 0, 10) is False
+        from utils import box_overlap
+        assert box_overlap(0, 10, 0, 10, 20, 30, 0, 10) is False
 
     def test_non_overlapping_y(self):
-        from main import BombermanGame
-        assert BombermanGame.box_overlap(0, 10, 0, 10, 0, 10, 20, 30) is False
+        from utils import box_overlap
+        assert box_overlap(0, 10, 0, 10, 0, 10, 20, 30) is False
 
     def test_touching_edge_counts_as_overlap(self):
-        from main import BombermanGame
+        from utils import box_overlap
         # Current code: R1 == L2 → not (R1 < L2) → True (counts as overlap)
-        assert BombermanGame.box_overlap(0, 10, 0, 10, 10, 20, 0, 10) is True
+        assert box_overlap(0, 10, 0, 10, 10, 20, 0, 10) is True
 
     def test_containment(self):
-        from main import BombermanGame
-        assert BombermanGame.box_overlap(0, 100, 0, 100, 25, 75, 25, 75) is True
+        from utils import box_overlap
+        assert box_overlap(0, 100, 0, 100, 25, 75, 25, 75) is True
