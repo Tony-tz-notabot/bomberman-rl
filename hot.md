@@ -11,6 +11,7 @@
   - 全部通过，无间歇性失败
 
 ### 2026-07-01
+- [x] **Task 8: 提取 input_handler.py** — 创建 input_handler.py 模块，包含 InputHandler 类。负责双人按键状态追踪（press/release）、边沿检测扣动（action 键上升沿触发）、build_actions() 生成 (p1_actions, p2_actions) 动作字典。BombermanGame 移除 keys_red/keys_blue/handle_key/sync_input/_build_red_actions/_build_blue_actions，改用 self.input_handler 委托。`_check_menu_key()` 处理状态转换键（ENTER/R/P）。全部 99 测试通过，游戏启动正常。
 - [x] **CLAUDE.md 添加压缩恢复指引** — 要求压缩后先读 hot.md 恢复心智
 - [x] **settings.json 配置三个钩子**
   - `PreCompact` — 压缩前检查进度并更新 hot.md，明确交接细节

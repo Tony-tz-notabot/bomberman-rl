@@ -15,6 +15,7 @@ from constants import (
 )
 from game_engine import GameEngine
 from renderer import Renderer
+from input_handler import InputHandler
 
 # ==================== 主游戏类 ====================
 class BombermanGame:
@@ -26,8 +27,7 @@ class BombermanGame:
         self.renderer = Renderer(self.screen)
         self.clock = pygame.time.Clock()
         self.running = True
-        self.keys_red = {'W': False, 'A': False, 'S': False, 'D': False, 'E': False,'Q':False}
-        self.keys_blue = {'UP': False, 'LEFT': False, 'DOWN': False, 'RIGHT': False, 'DEL': False,'END':False}
+        self.input_handler = InputHandler()
         # 设置面板
         self.show_settings = False
         self.settings_pause_state = None
@@ -69,45 +69,32 @@ class BombermanGame:
             if event.type == pygame.QUIT:
                 self.running = False
             elif event.type == pygame.KEYDOWN:
-                self.handle_key(event.key, True)
+                self.input_handler.press(event.key)
+                self._check_menu_key(event.key)
             elif event.type == pygame.KEYUP:
-                self.handle_key(event.key, False)
+                self.input_handler.release(event.key)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if self.state in (GameState.SETTINGS, GameState.SETTINGS_PAUSED):
                     self.handle_settings_click(event.pos)
 
-    def handle_key(self, key, pressed):
+    def _check_menu_key(self, key):
+        """Handle state-transition keys (ENTER, R, P)."""
         if self.state == GameState.MENU:
-            if pressed and key == pygame.K_RETURN:
+            if key == pygame.K_RETURN:
                 self.engine.reset_match()
             return
         if self.state == GameState.MATCH_END:
-            if pressed and key == pygame.K_r:
+            if key == pygame.K_r:
                 self.engine.reset_match()
             return
         if self.state in (GameState.SETTINGS, GameState.SETTINGS_PAUSED):
-            if pressed and key == pygame.K_p:
+            if key == pygame.K_p:
                 self.toggle_settings()
             return
 
-        if pressed and key == pygame.K_p:
+        if key == pygame.K_p:
             self.toggle_settings()
             return
-
-        # 红方
-        if key == pygame.K_w: self.keys_red['W'] = pressed
-        elif key == pygame.K_a: self.keys_red['A'] = pressed
-        elif key == pygame.K_s: self.keys_red['S'] = pressed
-        elif key == pygame.K_d: self.keys_red['D'] = pressed
-        elif key == pygame.K_e: self.keys_red['E'] = pressed
-        elif key == pygame.K_q: self.keys_red['Q'] = pressed
-        # 蓝方
-        elif key == pygame.K_UP: self.keys_blue['UP'] = pressed
-        elif key == pygame.K_LEFT: self.keys_blue['LEFT'] = pressed
-        elif key == pygame.K_DOWN: self.keys_blue['DOWN'] = pressed
-        elif key == pygame.K_RIGHT: self.keys_blue['RIGHT'] = pressed
-        elif key == pygame.K_DELETE: self.keys_blue['DEL'] = pressed
-        elif key == pygame.K_END: self.keys_blue['END'] = pressed
 
     def toggle_settings(self):
         if self.state in (GameState.SETTINGS, GameState.SETTINGS_PAUSED):
@@ -125,33 +112,8 @@ class BombermanGame:
 
     # ==================== 游戏更新 ====================
     def update(self, _dt_unused=None):
-        # Build action dicts from keyboard state
-        p1_actions = self._build_red_actions()
-        p2_actions = self._build_blue_actions()
+        p1_actions, p2_actions = self.input_handler.build_actions()
         self.engine.step(p1_actions, p2_actions)
-        # Update prev_action for edge detection next frame
-        self.red_player.prev_action = p1_actions.get("action", False)
-        self.blue_player.prev_action = p2_actions.get("action", False)
-
-    def _build_red_actions(self):
-        return {
-            "up": self.keys_red['W'],
-            "down": self.keys_red['S'],
-            "left": self.keys_red['A'],
-            "right": self.keys_red['D'],
-            "action": self.keys_red['E'] and not self.red_player.prev_action,
-            "ignite": self.keys_red['Q'],
-        }
-
-    def _build_blue_actions(self):
-        return {
-            "up": self.keys_blue['UP'],
-            "down": self.keys_blue['DOWN'],
-            "left": self.keys_blue['LEFT'],
-            "right": self.keys_blue['RIGHT'],
-            "action": self.keys_blue['DEL'] and not self.blue_player.prev_action,
-            "ignite": self.keys_blue['END'],
-        }
 
     # ==================== 渲染 ====================
     def render(self):
