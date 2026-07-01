@@ -6,50 +6,7 @@ import random
 import math
 import sys
 
-# ==================== 全局可配置参数（默认值） ====================
-class Config:
-    def __init__(self):
-        self.CELL_SIZE = 40
-        self.MAP_COLS = 19
-        self.MAP_ROWS = 11
-        self.UI_BAR_HEIGHT = 80
-        self.BRICK_GEN_PROB = 0.7
-        self.INIT_SPEED = 2.5           # 格/秒
-        self.SPEED_INCREMENT = 0.5
-        self.MAX_SPEED = 6
-        self.SPEED_LEVEL_CAP = 7
-        self.INIT_BOMB_MAX = 1
-        self.MAX_BOMB_CAP = 7
-        self.INIT_BLAST_RANGE = 2
-        self.MAX_BLAST_RANGE = 8
-        self.PLAYER_HITBOX_SIZE = 0.8
-        self.BOMB_FUSE = 2.0
-        self.BOMB_FLICKER_START = 0.5
-        self.KICK_INIT_VEL = 6.0
-        self.KICK_ACCEL = -2.0
-        self.DEATH_ANIM_DUR = 0.5
-        self.SHIELD_INVINCIBLE_DUR = 0.5
-        self.WIN_SCORE = 5
-        self.ROUND_DELAY = 3.0
-        self.BRICK_DROP_PROB = 0.15
-        self.BUFF_PROTECTION_TIME = 0.3
-        self.REFRESH_INTERVAL = 30.0
-        self.WEIGHT_BOMB_PLUS = 0.2
-        self.WEIGHT_BLAST_PLUS = 0.2
-        self.WEIGHT_SPEED_PLUS = 0.2
-        self.WEIGHT_UNKNOWN = 0.4
-        self.DURATION_KICK = 30.0
-        self.DURATION_REMOTE = 30.0
-        self.DURATION_SHIELD = 20.0
-        self.DURATION_DIARRHEA = 8.0
-        self.DURATION_REVERSE = 10.0
-        self.DURATION_FLOAT = 20.0
-
-    def reset_defaults(self):
-        self.__init__()
-
-# 全局配置实例
-cfg = Config()
+from config import Config, cfg
 
 # ==================== 窗口尺寸计算 ====================
 def get_map_width():
@@ -368,7 +325,7 @@ class BombermanGame:
             self.update_round_delay(dt)
 
     def update_round(self, dt):
-        self.round_time += dt
+        self.round_time += 1.0
         self.update_buff_refresh(dt)
         self.update_buff_protection(dt)
         self.update_player_movement(dt)
@@ -556,7 +513,7 @@ class BombermanGame:
                 self.move_bomb(bomb, dt)
             if bomb.type in ("normal", "converted"):
                 if bomb.timer > 0:
-                    bomb.timer -= dt
+                    bomb.timer -= 1.0
                     if bomb.timer <= 0:
                         bomb.exploding = True
             if bomb.type == "remote" and "remote" not in bomb.owner.abilities:
@@ -683,7 +640,7 @@ class BombermanGame:
     def update_buff_protection(self, dt):
         for buff in self.buffs:
             if buff.protection_timer > 0:
-                buff.protection_timer -= dt
+                buff.protection_timer -= 1.0
 
     def process_buff_pickups(self):
         for p in (self.red_player, self.blue_player):
@@ -720,7 +677,7 @@ class BombermanGame:
 
     # ---------- Buff刷新 ----------
     def update_buff_refresh(self, dt):
-        self.refresh_timer -= dt
+        self.refresh_timer -= 1.0
         if self.refresh_timer <= 0:
             self.spawn_random_buff()
             self.refresh_timer += cfg.REFRESH_INTERVAL
@@ -767,13 +724,13 @@ class BombermanGame:
     def update_ability_timers(self, dt):
         for p in (self.red_player, self.blue_player):
             for ability in list(p.abilities.keys()):
-                p.abilities[ability] -= dt
+                p.abilities[ability] -= 1.0
                 if p.abilities[ability] <= 0:
                     self.remove_ability(p, ability)
             if p.invincible_timer > 0:
-                p.invincible_timer -= dt
+                p.invincible_timer -= 1.0
             if not p.alive and p.death_timer > 0:
-                p.death_timer -= dt
+                p.death_timer -= 1.0
 
     def remove_ability(self, p, ability):
         if ability not in p.abilities:
@@ -860,7 +817,7 @@ class BombermanGame:
         self.round_delay_timer = cfg.ROUND_DELAY
 
     def update_round_delay(self, dt):
-        self.round_delay_timer -= dt
+        self.round_delay_timer -= 1.0
         if self.round_delay_timer <= 0:
             self.reset_round()
 
@@ -1008,7 +965,7 @@ class BombermanGame:
 
         if "shield" in p.abilities:
             shield_r = r + 4
-            if p.abilities.get("shield", 10) <= 2.0 and int(p.abilities["shield"] * 10) % 2 == 0:
+            if p.abilities["shield"] <= 2.0 * cfg.FPS and int(p.abilities["shield"] / cfg.FPS * 10) % 2 == 0:
                 pass  # 闪烁时跳过绘制光环
             else:
                 alpha_surf = pygame.Surface((shield_r*2, shield_r*2), pygame.SRCALPHA)
@@ -1064,7 +1021,7 @@ class BombermanGame:
         ability_x_right = bomb_start_x_right - 15
         self.draw_ability_icons(ability_x_right, 10, self.blue_player.abilities, False)
 
-        timer_text = self.font_big.render(f"{int(self.round_time)}", True, COLOR_TEXT)
+        timer_text = self.font_big.render(f"{int(self.round_time / cfg.FPS)}", True, COLOR_TEXT)
         timer_rect = timer_text.get_rect(center=(mid_x, cfg.UI_BAR_HEIGHT // 2))
         self.screen.blit(timer_text, timer_rect)
 
@@ -1165,7 +1122,7 @@ class BombermanGame:
         overlay.fill((0, 0, 0, 120))
         self.screen.blit(overlay, (0, 0))
         font = pygame.font.Font(None, 48)
-        text = font.render(f"Next round in {int(self.round_delay_timer)}...", True, COLOR_TEXT)
+        text = font.render(f"Next round in {int(round(self.round_delay_timer / cfg.FPS))}...", True, COLOR_TEXT)
         text_rect = text.get_rect(center=(get_window_width()//2, get_window_height()//2))
         self.screen.blit(text, text_rect)
 
@@ -1235,7 +1192,7 @@ class BombermanGame:
     # ==================== 主循环 ====================
     def run(self):
         while self.running:
-            dt = self.clock.tick(60) / 1000.0
+            dt = self.clock.tick(cfg.FPS) / 1000.0
             self.handle_events()
             if self.state not in (GameState.SETTINGS, GameState.SETTINGS_PAUSED):
                 self.update(dt)
