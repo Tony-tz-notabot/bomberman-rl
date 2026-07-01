@@ -12,18 +12,10 @@ from constants import (
     ABILITY_KICK_COLOR, ABILITY_REMOTE_COLOR, ABILITY_SHIELD_COLOR,
     ABILITY_DIARRHEA_COLOR, ABILITY_REVERSE_COLOR, ABILITY_FLOAT_COLOR,
     GameState,
+    CELL_EMPTY, CELL_STONE, CELL_BRICK, CELL_BUFF, CELL_BOMB, CELL_EXPLOSION,
 )
 from utils import grid_to_pixel, grid_center, get_map_width, get_window_height
 from models import GameSnapshot
-
-
-# CellType constants (mirrored from game_engine for snapshot decoding)
-CELL_EMPTY = 0
-CELL_STONE = 1
-CELL_BRICK = 2
-CELL_BUFF = 3
-CELL_BOMB = 4
-CELL_EXPLOSION = 5
 
 
 class Renderer:

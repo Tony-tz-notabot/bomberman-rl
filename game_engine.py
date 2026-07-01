@@ -2,20 +2,12 @@
 import random
 import math
 from config import cfg
-from constants import GameState, COLOR_RED, COLOR_BLUE
+from constants import GameState, COLOR_RED, COLOR_BLUE, \
+    CELL_EMPTY, CELL_STONE, CELL_BRICK, CELL_BUFF, CELL_BOMB, CELL_EXPLOSION
 from utils import pixel_to_grid, grid_center, sign, \
     box_overlap, get_map_width, get_window_height
 from models import Player, Bomb, BuffItem, \
     GameSnapshot, PlayerSnapshot, BombSnapshot, BuffItemSnapshot
-
-
-# CellType encoding for map_grid
-CELL_EMPTY = 0
-CELL_STONE = 1
-CELL_BRICK = 2
-CELL_BUFF = 3
-CELL_BOMB = 4
-CELL_EXPLOSION = 5
 
 
 class GameEngine:

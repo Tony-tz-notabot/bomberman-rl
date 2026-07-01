@@ -33,3 +33,12 @@ class GameState:
     MATCH_END = 3
     SETTINGS = 4
     SETTINGS_PAUSED = 5
+
+
+# CellType encoding for map_grid — single source of truth
+CELL_EMPTY = 0
+CELL_STONE = 1
+CELL_BRICK = 2
+CELL_BUFF = 3
+CELL_BOMB = 4
+CELL_EXPLOSION = 5
