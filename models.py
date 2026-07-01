@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from config import cfg
 from utils import pixel_to_grid, grid_center
 
