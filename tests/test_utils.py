@@ -164,7 +164,8 @@ class TestPlayer:
     """Player constructor, reset(), hitbox()"""
 
     def test_constructor(self, cfg):
-        from main import Player, COLOR_RED
+        from models import Player
+        from constants import COLOR_RED
         p = Player("red", COLOR_RED)
         assert p.id == "red"
         assert p.color == COLOR_RED
@@ -174,7 +175,9 @@ class TestPlayer:
         assert p.remote_queue == []
 
     def test_reset_restores_defaults(self, cfg):
-        from main import Player, COLOR_RED, grid_center
+        from models import Player
+        from constants import COLOR_RED
+        from utils import grid_center
         p = Player("red", COLOR_RED)
         p.wins = 3
         p.abilities["shield"] = 10.0
@@ -189,7 +192,8 @@ class TestPlayer:
         assert p.pos_y == grid_center(1, 1)[1]
 
     def test_hitbox_dimensions(self, cfg):
-        from main import Player, COLOR_RED
+        from models import Player
+        from constants import COLOR_RED
         p = Player("red", COLOR_RED)
         p.pos_x = 100.0
         p.pos_y = 200.0
@@ -203,50 +207,50 @@ class TestPlayer:
 
 class TestBomb:
     def test_construction(self, cfg):
-        from main import Bomb
-        b = Bomb(0, "red", "normal", 3, 5, 2.0)
+        from models import Bomb
+        b = Bomb(0, "red", "normal", 3, 5, 48)  # 48 frames = 2s at 24fps
         assert b.id == 0
         assert b.owner == "red"
         assert b.type == "normal"
-        assert b.timer == pytest.approx(2.0)
+        assert b.fuse_frames == 48
         assert b.vx == 0.0
         assert b.vy == 0.0
         assert b.exploding is False
         assert b.exploded is False
 
     def test_grid_pos_roundtrip(self, cfg):
-        from main import Bomb
-        b = Bomb(1, "red", "remote", 7, 4, -1.0)
+        from models import Bomb
+        b = Bomb(1, "red", "remote", 7, 4, -1)
         gx, gy = b.grid_pos()
         assert gx == 7
         assert gy == 4
 
-    def test_remote_bomb_has_minus_one_timer(self, cfg):
-        from main import Bomb
-        b = Bomb(2, "blue", "remote", 1, 1, -1.0)
-        assert b.timer == -1.0
+    def test_remote_bomb_has_minus_one_fuse(self, cfg):
+        from models import Bomb
+        b = Bomb(2, "blue", "remote", 1, 1, -1)
+        assert b.fuse_frames == -1
 
 
 class TestBuffItem:
     def test_construction(self, cfg):
-        from main import BuffItem
+        from models import BuffItem
         b = BuffItem("bomb_plus", "", 5, 3)
         assert b.type == "bomb_plus"
         assert b.unknown_subtype == ""
         assert b.protection_timer == cfg.BUFF_PROTECTION_TIME
 
     def test_grid_pos(self, cfg):
-        from main import BuffItem
+        from models import BuffItem
         b = BuffItem("unknown", "kick", 10, 7)
         gx, gy = b.grid_pos()
         assert gx == 10
         assert gy == 7
 
     def test_protection_timer_decays(self, cfg):
-        from main import BuffItem
+        from models import BuffItem
         b = BuffItem("speed_plus", "", 1, 1)
         b.protection_timer -= 0.1
-        assert b.protection_timer == pytest.approx(cfg.BUFF_PROTECTION_TIME - 0.1)
+        assert b.protection_timer == pytest.approx(7 - 0.1)  # 7 frames ≈ 0.3s
 
 
 class TestGameState:

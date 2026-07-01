@@ -22,87 +22,7 @@ from constants import (
     ABILITY_DIARRHEA_COLOR, ABILITY_REVERSE_COLOR, ABILITY_FLOAT_COLOR,
     GameState,
 )
-
-# ==================== 数据结构 ====================
-class Player:
-    def __init__(self, pid, color):
-        self.id = pid          # "red" or "blue"
-        self.color = color
-        self.pos_x = 0.0
-        self.pos_y = 0.0
-        self.velocity = cfg.INIT_SPEED
-        self.bomb_max = cfg.INIT_BOMB_MAX
-        self.bomb_placed_count = 0
-        self.blast_range = cfg.INIT_BLAST_RANGE
-        self.alive = True
-        self.death_timer = 0.0
-        self.invincible_timer = 0.0
-        self.wins = 0
-        self.perm_bomb_plus = 0
-        self.perm_blast_plus = 0
-        self.perm_speed_plus = 0
-        self.abilities = {}        # {ability_name: remaining_seconds}
-        self.remote_queue = []     # list of bomb IDs (FIFO)
-        # 输入
-        self.input_up = False
-        self.input_down = False
-        self.input_left = False
-        self.input_right = False
-        self.input_action = False
-        self.prev_action = False
-        self.vx = 0.0
-        self.vy = 0.0
-
-    def reset(self, spawn_x, spawn_y):
-        self.pos_x, self.pos_y = grid_center(spawn_x, spawn_y)
-        self.velocity = cfg.INIT_SPEED
-        self.bomb_max = cfg.INIT_BOMB_MAX
-        self.bomb_placed_count = 0
-        self.blast_range = cfg.INIT_BLAST_RANGE
-        self.alive = True
-        self.death_timer = 0.0
-        self.invincible_timer = 0.0
-        self.perm_bomb_plus = 0
-        self.perm_blast_plus = 0
-        self.perm_speed_plus = 0
-        self.abilities.clear()
-        self.remote_queue.clear()
-        self.vx = 0.0
-        self.vy = 0.0
-        self.input_up = self.input_down = self.input_left = self.input_right = False
-        self.input_action = False
-        self.input_ignite = False
-        self.prev_action = False
-
-    def hitbox(self):
-        half = (cfg.PLAYER_HITBOX_SIZE * cfg.CELL_SIZE) / 2
-        return (self.pos_x - half, self.pos_x + half,
-                self.pos_y - half, self.pos_y + half)
-
-class Bomb:
-    def __init__(self, bid, owner, bomb_type, grid_x, grid_y, timer):
-        self.id = bid
-        self.owner = owner
-        self.type = bomb_type          # "normal", "remote", "converted"
-        self.pos_x, self.pos_y = grid_center(grid_x, grid_y)
-        self.timer = timer             # -1 for remote untimed
-        self.vx = 0.0
-        self.vy = 0.0
-        self.exploding = False
-        self.exploded = False
-
-    def grid_pos(self):
-        return pixel_to_grid(self.pos_x, self.pos_y)
-
-class BuffItem:
-    def __init__(self, buff_type, sub_type, gx, gy):
-        self.type = buff_type           # "bomb_plus", "blast_plus", "speed_plus", "unknown"
-        self.unknown_subtype = sub_type # 当type为unknown时有效
-        self.pos_x, self.pos_y = grid_center(gx, gy)
-        self.protection_timer = cfg.BUFF_PROTECTION_TIME
-
-    def grid_pos(self):
-        return pixel_to_grid(self.pos_x, self.pos_y)
+from models import Player, Bomb, BuffItem
 
 # ==================== 主游戏类 ====================
 class BombermanGame:
@@ -413,7 +333,7 @@ class BombermanGame:
         gx, gy = pixel_to_grid(p.pos_x, p.pos_y)
         if self.is_bomb_at(gx, gy):
             return
-        bomb = self.create_bomb(p, "remote", gx, gy, -1.0)
+        bomb = self.create_bomb(p, "remote", gx, gy, -1)
         p.remote_queue.append(bomb.id)
 
     def create_bomb(self, owner, bomb_type, gx, gy, timer):
@@ -447,13 +367,13 @@ class BombermanGame:
             if bomb.vx != 0 or bomb.vy != 0:
                 self.move_bomb(bomb, dt)
             if bomb.type in ("normal", "converted"):
-                if bomb.timer > 0:
-                    bomb.timer -= 1.0
-                    if bomb.timer <= 0:
+                if bomb.fuse_frames > 0:
+                    bomb.fuse_frames -= 1
+                    if bomb.fuse_frames <= 0:
                         bomb.exploding = True
             if bomb.type == "remote" and "remote" not in bomb.owner.abilities:
                 bomb.type = "converted"
-                bomb.timer = cfg.BOMB_FUSE
+                bomb.fuse_frames = cfg.BOMB_FUSE
 
     def move_bomb(self, bomb, dt):
         bomb.vx += sign(bomb.vx) * cfg.KICK_ACCEL * cfg.CELL_SIZE * dt
@@ -659,13 +579,13 @@ class BombermanGame:
     def update_ability_timers(self, dt):
         for p in (self.red_player, self.blue_player):
             for ability in list(p.abilities.keys()):
-                p.abilities[ability] -= 1.0
+                p.abilities[ability] -= 1
                 if p.abilities[ability] <= 0:
                     self.remove_ability(p, ability)
             if p.invincible_timer > 0:
-                p.invincible_timer -= 1.0
+                p.invincible_timer -= 1
             if not p.alive and p.death_timer > 0:
-                p.death_timer -= 1.0
+                p.death_timer -= 1
 
     def remove_ability(self, p, ability):
         if ability not in p.abilities:
@@ -676,7 +596,7 @@ class BombermanGame:
             for bomb in self.bombs:
                 if bomb.owner is p and bomb.type == "remote":
                     bomb.type = "converted"
-                    bomb.timer = cfg.BOMB_FUSE
+                    bomb.fuse_frames = cfg.BOMB_FUSE
         elif ability == "float":
             self.handle_float_end(p)
 
@@ -715,7 +635,7 @@ class BombermanGame:
 
     def kill_player(self, p):
         p.alive = False
-        p.death_timer = 0.0
+        p.death_timer = 0
 
     # ---------- 回合结束 ----------
     def check_round_end(self):
@@ -766,7 +686,7 @@ class BombermanGame:
             for buff in self.buffs:
                 self.draw_buff(buff)
             for bomb in self.bombs:
-                flicker = (bomb.type in ("normal", "converted") and bomb.timer <= cfg.BOMB_FLICKER_START)
+                flicker = (bomb.type in ("normal", "converted") and bomb.fuse_frames <= cfg.BOMB_FLICKER_START)
                 self.draw_bomb(bomb, flicker)
             for cell in self.explosion_cells:
                 self.draw_explosion_cell(cell)
@@ -856,7 +776,7 @@ class BombermanGame:
 
     # ---------- 炸弹 ----------
     def draw_bomb(self, bomb, flicker):
-        if flicker and int(bomb.timer * 10) % 2 == 0:
+        if flicker and int(bomb.fuse_frames * 10) % 2 == 0:
             return  # 闪烁效果
         cx, cy = int(bomb.pos_x), int(bomb.pos_y)
         r = int(cfg.CELL_SIZE * 0.35)

@@ -130,7 +130,7 @@ class TestBombPlacement:
         b = game.bombs[0]
         assert b.owner is game.red_player
         assert b.type == "normal"
-        assert b.timer == pytest.approx(48)
+        assert b.fuse_frames == pytest.approx(48)
         assert game.red_player.bomb_placed_count == 1
 
     def test_place_remote_bomb(self, game):
@@ -139,7 +139,7 @@ class TestBombPlacement:
         assert len(game.bombs) == 1
         b = game.bombs[0]
         assert b.type == "remote"
-        assert b.timer == -1.0
+        assert b.fuse_frames == -1
         assert b.id in game.red_player.remote_queue
 
     def test_cannot_place_on_bomb(self, game):
@@ -416,7 +416,7 @@ class TestRemoteAbility:
         game.update_ability_timers(1.0)
         assert "remote" not in game.red_player.abilities
         assert game.bombs[0].type == "converted"
-        assert game.bombs[0].timer == pytest.approx(cfg.BOMB_FUSE)
+        assert game.bombs[0].fuse_frames == pytest.approx(cfg.BOMB_FUSE)
 
     def test_remote_queue_cleared(self, game):
         set_player_at(game, game.red_player, 3, 3)
