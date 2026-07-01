@@ -1,104 +1,213 @@
-# Bomberman 双人 PVP
+# Bomberman-RL
 
-基于 Python + Pygame 的本地同屏双人对战炸弹人游戏，包含丰富的永久增强道具与限时特殊能力，支持完全自定义的游戏参数。
+**Gym + PettingZoo reinforcement learning environment for Bomberman PVP.**
 
-## 功能特色
+Clean, refactored codebase designed for both single-agent training (vs scripted opponents)
+and multi-agent self-play. The core game engine runs headless with zero pygame dependency,
+so training pipelines need no display or GUI.
 
-- 🧨 经典炸弹人玩法：放置炸弹、爆炸连锁、破坏砖块、淘汰对手
-- 👥 红蓝双人对战，同屏竞技
-- 🧱 随机生成地图，可破坏砖块与不可破坏石墙
-- 💣 三种炸弹类型：普通炸弹、遥控炸弹、踢动炸弹
-- ✨ 6 种限时特殊能力：踢炸弹、遥控引爆、护盾、腹泻、方向反转、悬浮
-- 📦 3 种永久属性增强道具：更多炸弹、更长火焰、更快速度
-- ⚙️ 完全可配置的游戏参数（30+ 项），可在游戏内一键重置
-- 🖥️ 可视化的 UI 信息栏，展示双方状态与能力
-- 🏆 先赢 5 局的玩家获得最终胜利（胜局数可调）
-
-## 操作说明
-
-### 红方玩家
-| 按键 | 作用 |
-|------|------|
-| W/A/S/D | 移动 |
-| E | 放置炸弹 / 使用能力 |
-| Q | 引爆遥控炸弹 |
-
-### 蓝方玩家
-| 按键 | 作用 |
-|------|------|
-| ↑ ← ↓ → | 移动 |
-| Delete | 放置炸弹 / 使用能力 |
-| End | 引爆遥控炸弹 |
-
-### 全局按键
-| 按键 | 作用 |
-|------|------|
-| P | 打开/关闭设置面板（暂停游戏） |
-| Enter | 主菜单开始比赛 |
-| R | 比赛结束后重新开始 |
-
-## 运行环境与安装
-
-### 依赖
-- Python 3.7+
-- Pygame 2.x
-
-### 安装与启动
-```bash
-# 克隆仓库
-git clone https://github.com/yourname/bomberman-pvp.git
-cd bomberman-pvp
-
-# 安装依赖
-pip install pygame
-
-# 运行游戏
-python main.py
+```
+           ┌──────────┐
+           │ GameEngine│  ← pure logic, no pygame
+           └─────┬─────┘
+              ┌──┴──┐
+              ▼     ▼
+       ┌─────────┐ ┌──────────────┐
+       │ Gym.Env │ │ PettingZoo   │
+       │single-  │ │ ParallelEnv  │
+       │agent    │ │ multi-agent  │
+       └─────────┘ └──────────────┘
 ```
 
-## 游戏规则快速浏览
+---
 
-- **地图**：19×11 网格，石头偶数交叉，其余随机生成砖块或空地。
-- **炸弹**：默认最多持有 1 枚，引信 2 秒后爆炸，火焰长度 2 格。
-- **爆炸**：四方向延伸，遇石墙停止，可摧毁砖块并连锁引爆其他炸弹。
-- **拾取道具**：破坏砖块概率掉落，或每 30 秒地图随机刷新。
-- **能力系统**：拾取“未知”道具随机获得临时能力，持续 8~30 秒。
-- **胜负**：一方死亡且动画结束后存活方得分；先得 5 分者获胜。
+## Features
 
-详细规则请参阅 [规则文档](RULES.md)。
+| | |
+|---|---|
+| 🎮 **Gym.Env** | Single-agent with pluggable `opponent_fn` for the blue player |
+| 🤝 **PettingZoo ParallelEnv** | Multi-agent self-play with tied-policy support |
+| 🧠 **8-channel observation** | Terrain, gaussian player heatmaps, bomb fuses, buffs, ability & stat broadcasts — CNN-ready `Box(0,1,(11,19,8))` |
+| ⌨️ **MultiBinary(6) action** | Raw key mapping `[up, down, left, right, action, ignite]` |
+| 🔌 **Pluggable rewards** | `RewardFunction` adapter — swap at runtime, zero coupling to env |
+| 🗺️ **Custom map init** | Pass an `(11×19)` matrix via `reset(options={"grid": ...})` |
+| 🏃 **Headless engine** | `GameEngine` runs 5000+ steps/second with no display |
+| ✅ **112 tests** | Mechanics, environment API, and observation correctness verified |
 
-## 自定义参数
+---
 
-按 `P` 打开设置面板查看所有可调参数（如地图大小、速度上限、能力时长等）。点击面板任意位置可将所有参数恢复为默认值并重置比赛。
+## Quick Start
 
-可在代码的 `Config` 类中修改以下默认值（部分示例）：
+```bash
+pip install gym pettingzoo numpy pygame
+git clone https://github.com/Tony-tz-notabot/bomberman-rl.git
+cd bomberman-rl
+```
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `WIN_SCORE` | 5 | 获胜所需局数 |
-| `INIT_SPEED` | 2.5 | 初始移速（格/秒） |
-| `BOMB_FUSE` | 2.0 | 引信时长（秒） |
-| `REFRESH_INTERVAL` | 30.0 | Buff 自动刷新间隔（秒） |
+### Single-agent training
 
-## 文件结构
+```python
+from bomberman_env import BombermanEnv
+from rewards.sparse import SparseReward
+import numpy as np
+
+def random_opponent(snapshot, agent_id):
+    return np.random.randint(0, 2, size=6, dtype=np.int8)
+
+env = BombermanEnv(
+    reward_fn=SparseReward(),
+    opponent_fn=random_opponent,
+)
+obs, info = env.reset()
+action = np.array([1, 0, 0, 0, 0, 0])  # move up
+obs, reward, terminated, truncated, info = env.step(action)
+```
+
+### Multi-agent (PettingZoo)
+
+```python
+from pettingzoo_env import BombermanPettingZooEnv
+
+env = BombermanPettingZooEnv()
+obs = env.reset()
+actions = {
+    "red": np.array([0, 1, 0, 0, 0, 0]),   # blue moves down
+    "blue": np.array([1, 0, 0, 0, 0, 0]),   # red moves up
+}
+obs, rewards, terms, truncs, infos = env.step(actions)
+```
+
+### Custom map
+
+```python
+import numpy as np
+grid = np.zeros((11, 19), dtype=np.int32)
+grid[1, 1] = 3   # red spawn
+grid[9, 17] = 4  # blue spawn
+obs, info = env.reset(options={"grid": grid})
+```
+
+### SB3 training example
+
+```bash
+pip install stable-baselines3
+python examples/train_with_sb3.py
+```
+
+---
+
+## Observation Space
+
+`Box(0.0, 1.0, (11, 19, 8), np.float32)` — 8 channels, H×W×C for CNN.
+
+| CH | Name | Values | Description |
+|----|------|--------|-------------|
+| 0 | terrain | 0 / 0.5 / 1.0 | floor / brick / stone |
+| 1 | players | [0.1, 1.0] | Gaussian heatmap: self [0.1, 0.5], opponent (0.5, 1.0] |
+| 2 | bomb+fuse | [0, 1] | `fuse_frames / BOMB_FUSE`; remote bombs = 1.0 |
+| 3 | buff+explosion | [0, 1] | Buff types 0.2–0.9, explosion = 1.0 |
+| 4 | self abilities | [0, 1] | 6 ability timers broadcast (normalized) |
+| 5 | opp abilities | [0, 1] | same, for the opponent |
+| 6 | self stats | [0, 1] | `bomb_placed / bomb_max` broadcast |
+| 7 | opp stats | [0, 1] | same, for the opponent |
+
+Player positions are encoded at **pixel-level** via Gaussian heatmap (σ = 0.3 grid cells),
+enabling sub-cell movement perception.
+
+---
+
+## Action Space
+
+`spaces.MultiBinary(6)` — each dimension is 0 or 1.
+
+| Index | Key | Description |
+|-------|-----|-------------|
+| 0 | up | Move / look up |
+| 1 | down | Move / look down |
+| 2 | left | Move / look left |
+| 3 | right | Move / look right |
+| 4 | action | Place bomb (edge-triggered) |
+| 5 | ignite | Detonate remote bomb |
+
+Opposing directions (up+down or left+right) can be penalized via `penalty_opposing`.
+
+---
+
+## Reward System
+
+The `RewardFunction` base class decouples reward logic from environment:
+
+```python
+from rewards import RewardFunction
+
+class MyReward(RewardFunction):
+    def reset(self, episode_info: dict):
+        self.my_state = 0
+
+    def __call__(self, engine, prev_snapshot, snapshot, action, agent_id):
+        # Access full engine state, compare snapshots, shape rewards
+        return 0.01  # per-frame shaping
+
+env.reward_fn = MyReward()  # swap at runtime
+```
+
+Built-in: `SparseReward` (+1 win, -1 lose, 0 draw, 0 otherwise).
+
+---
+
+## Environment Parameters
+
+| Param | Default | Description |
+|-------|---------|-------------|
+| `reward_fn` | `SparseReward()` | Reward strategy |
+| `opponent_fn` | `random_opponent` | Blue player policy `(snapshot, agent_id) → action` |
+| `penalty_opposing` | `0.0` | Penalty for up+down or left+right simultaneously |
+
+---
+
+## Game Rules (condensed)
+
+| | |
+|---|---|
+| **Map** | 19×11 grid, indestructible stone pillars at even intersections |
+| **Bombs** | Max 1 (upgradeable), 2s fuse, 2-cell blast (upgradeable) |
+| **Explosion** | Cross-pattern, stops at stone, destroys brick, chains other bombs |
+| **Buffs** | Dropped from bricks (15%) or random refresh (30s). Permanent: bomb+, blast+, speed+. Unknown: 6 temporary abilities |
+| **Abilities** | Kick, remote detonate, shield, diarrhea, reverse controls, float (8–30s) |
+| **Win** | First to 5 round wins (configurable) |
+
+Full rules: see [RULES.md](RULES.md).
+
+---
+
+## Project Structure
 
 ```
 .
-├── main.py         # 游戏主程序
-├── RULES.md        # 完整规则文档
-├── MIT license
-└── README.md
+├── game_engine.py          # Pure game logic (440 lines, zero pygame)
+├── main.py                 # Pygame GUI entry point (for human play)
+├── bomberman_env.py        # Gym.Env single-agent wrapper
+├── pettingzoo_env.py       # PettingZoo ParallelEnv wrapper
+├── config.py               # All tunable parameters (30+)
+├── constants.py            # Enums, color constants
+├── models.py               # Player, Bomb, BuffItem + frozen snapshots
+├── utils.py                # Coordinate conversion, collision helpers
+├── input_handler.py        # Keyboard input → action dicts
+├── renderer.py             # Pygame rendering (engine-agnostic)
+├── settings_ui.py          # In-game settings panel
+├── rewards/
+│   ├── __init__.py          # RewardFunction base class
+│   └── sparse.py            # SparseReward (+1/-1/0)
+├── tests/
+│   ├── test_game_mechanics.py   # 99 engine tests
+│   ├── test_bomberman_env.py    # 8 gym env tests
+│   └── test_pettingzoo_env.py   # 4 pettingzoo env tests
+└── examples/
+    └── train_with_sb3.py    # SB3 PPO training example
 ```
 
-## 已知问题 / 待优化
+---
 
-- 设置面板目前仅支持一键重置，无法单独调整参数（预期后续加入滑块/输入框）。
-- 踢炸弹加速度为常量，在不同 CELL_SIZE 下移动距离会有所不同。
+## License
 
-## 致谢
-
-灵感来自经典 FC 炸弹人系列，使用 Pygame 社区库开发。欢迎提交 Issue 或 Pull Request！
-
-## 许可证
-
-MIT License
+MIT

@@ -1,2 +1,25 @@
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.coverage.*
+
+# Local dev / agent docs (not for distribution)
+hot.md
+CLAUDE.md
+.claude/
+whole-branch-review.diff
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
