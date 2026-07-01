@@ -3,7 +3,6 @@ bomberman version 2.0.2
 """
 import pygame
 import random
-import math
 import sys
 
 from config import Config, cfg
@@ -11,7 +10,6 @@ from config import Config, cfg
 from utils import (
     grid_to_pixel, grid_center, pixel_to_grid, clamp, sign,
     get_map_width, get_map_height, get_window_width, get_window_height,
-    box_overlap,
 )
 from constants import (
     COLOR_BG, COLOR_FLOOR, COLOR_STONE, COLOR_BRICK,
@@ -23,27 +21,17 @@ from constants import (
     GameState,
 )
 from models import Player, Bomb, BuffItem
+from game_engine import GameEngine
 
 # ==================== 主游戏类 ====================
 class BombermanGame:
     def __init__(self):
         pygame.init()
+        self.engine = GameEngine()
         self.screen = pygame.display.set_mode((get_window_width(), get_window_height()), pygame.RESIZABLE)
         pygame.display.set_caption("炸弹人 双人PVP v2.8")
         self.clock = pygame.time.Clock()
         self.running = True
-        self.state = GameState.MENU
-        self.grid = [[None for _ in range(cfg.MAP_ROWS + 1)] for _ in range(cfg.MAP_COLS + 1)]
-        self.red_player = Player("red", COLOR_RED)
-        self.blue_player = Player("blue", COLOR_BLUE)
-        self.bombs = []
-        self.buffs = []
-        self.explosion_cells = set()
-        self.round_time = 0.0
-        self.refresh_timer = cfg.REFRESH_INTERVAL
-        self.round_delay_timer = 0.0
-        self.current_winner = ""   # "red", "blue", "" for tie
-        self.next_bomb_id = 0
         self.keys_red = {'W': False, 'A': False, 'S': False, 'D': False, 'E': False,'Q':False}
         self.keys_blue = {'UP': False, 'LEFT': False, 'DOWN': False, 'RIGHT': False, 'DEL': False,'END':False}
         # 设置面板
@@ -56,45 +44,40 @@ class BombermanGame:
         self.font_small = pygame.font.Font(None, 18)
         self.font_medium = pygame.font.Font(None, 24)
         self.font_big = pygame.font.Font(None, 48)
-        # 安全格子
-        self.safe_spots = self.compute_safe_spots()
-        # 开始
-        self.reset_match()
+        # Previous references kept as properties for backward compat
+        self.state = self.engine.state
 
-    def compute_safe_spots(self):
-        return {(1, 2), (2, 1), (cfg.MAP_COLS - 1, cfg.MAP_ROWS), (cfg.MAP_COLS, cfg.MAP_ROWS - 1)}
+    # ── Forward game state to engine ──
 
-    def reset_match(self):
-        self.red_player.wins = 0
-        self.blue_player.wins = 0
-        self.reset_round()
+    @property
+    def grid(self): return self.engine.grid
 
-    def reset_round(self):
-        self.generate_map()
-        self.red_player.reset(1, 1)
-        self.blue_player.reset(cfg.MAP_COLS, cfg.MAP_ROWS)
-        self.bombs.clear()
-        self.buffs.clear()
-        self.explosion_cells.clear()
-        self.round_time = 0.0
-        self.refresh_timer = cfg.REFRESH_INTERVAL
-        self.round_delay_timer = 0.0
-        self.current_winner = ""
-        self.next_bomb_id = 0
-        self.state = GameState.ROUND_RUNNING
+    @property
+    def red_player(self): return self.engine.red_player
 
-    def generate_map(self):
-        for x in range(1, cfg.MAP_COLS + 1):
-            for y in range(1, cfg.MAP_ROWS + 1):
-                if x % 2 == 0 and y % 2 == 0:
-                    self.grid[x][y] = "stone"
-                elif (x % 2 == 0) != (y % 2 == 0):  # 一奇一偶
-                    if (x, y) in self.safe_spots:
-                        self.grid[x][y] = "floor"
-                    else:
-                        self.grid[x][y] = "brick" if random.random() < cfg.BRICK_GEN_PROB else "floor"
-                else:
-                    self.grid[x][y] = "floor"
+    @property
+    def blue_player(self): return self.engine.blue_player
+
+    @property
+    def bombs(self): return self.engine.bombs
+
+    @property
+    def buffs(self): return self.engine.buffs
+
+    @property
+    def explosion_cells(self): return self.engine.explosion_cells
+
+    @property
+    def state(self): return self.engine.state
+
+    @state.setter
+    def state(self, val): self.engine.state = val
+
+    @property
+    def round_time(self): return self.engine.round_frame
+
+    @property
+    def round_delay_timer(self): return self.engine.round_delay_timer
 
     # ==================== 输入处理 ====================
     def handle_events(self):
@@ -108,16 +91,15 @@ class BombermanGame:
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if self.state in (GameState.SETTINGS, GameState.SETTINGS_PAUSED):
                     self.handle_settings_click(event.pos)
-        self.sync_input()
 
     def handle_key(self, key, pressed):
         if self.state == GameState.MENU:
             if pressed and key == pygame.K_RETURN:
-                self.reset_match()
+                self.engine.reset_match()
             return
         if self.state == GameState.MATCH_END:
             if pressed and key == pygame.K_r:
-                self.reset_match()
+                self.engine.reset_match()
             return
         if self.state in (GameState.SETTINGS, GameState.SETTINGS_PAUSED):
             if pressed and key == pygame.K_p:
@@ -143,25 +125,6 @@ class BombermanGame:
         elif key == pygame.K_DELETE: self.keys_blue['DEL'] = pressed
         elif key == pygame.K_END: self.keys_blue['END'] = pressed
 
-    def sync_input(self):
-        p = self.red_player
-        p.input_up = self.keys_red['W']
-        p.input_down = self.keys_red['S']
-        p.input_left = self.keys_red['A']
-        p.input_right = self.keys_red['D']
-        p.prev_action = p.input_action
-        p.input_action = self.keys_red['E'] and not p.prev_action
-        p.input_ignite = self.keys_red['Q']
-
-        p = self.blue_player
-        p.input_up = self.keys_blue['UP']
-        p.input_down = self.keys_blue['DOWN']
-        p.input_left = self.keys_blue['LEFT']
-        p.input_right = self.keys_blue['RIGHT']
-        p.prev_action = p.input_action
-        p.input_action = self.keys_blue['DEL'] and not p.prev_action
-        p.input_ignite = self.keys_blue['END']
-
     def toggle_settings(self):
         if self.state in (GameState.SETTINGS, GameState.SETTINGS_PAUSED):
             if self.settings_pause_state is not None:
@@ -177,504 +140,38 @@ class BombermanGame:
             self.state = GameState.SETTINGS
 
     # ==================== 游戏更新 ====================
-    def update(self, dt):
-        if self.state == GameState.ROUND_RUNNING:
-            self.update_round(dt)
-        elif self.state == GameState.ROUND_END_DELAY:
-            self.update_round_delay(dt)
+    def update(self, _dt_unused=None):
+        # Build action dicts from keyboard state
+        p1_actions = self._build_red_actions()
+        p2_actions = self._build_blue_actions()
+        self.engine.step(p1_actions, p2_actions)
+        # Update prev_action for edge detection next frame
+        self.red_player.prev_action = p1_actions.get("action", False)
+        self.blue_player.prev_action = p2_actions.get("action", False)
 
-    def update_round(self, dt):
-        self.round_time += 1.0
-        self.update_buff_refresh(dt)
-        self.update_buff_protection(dt)
-        self.update_player_movement(dt)
-        self.update_bomb_timers_and_movement(dt)
-        self.process_explosions()
-        self.process_player_death()
-        self.process_buff_pickups()
-        self.update_ability_timers(dt)
-        self.check_round_end()
-
-    # ---------- 玩家移动 ----------
-    def update_player_movement(self, dt):
-        for p in (self.red_player, self.blue_player):
-            if not p.alive:
-                continue
-            old_gx, old_gy = pixel_to_grid(p.pos_x, p.pos_y)
-            dir_x, dir_y = self.get_input_direction(p)
-            if "reverse" in p.abilities:
-                dir_x = -dir_x
-                dir_y = -dir_y
-            speed = p.velocity
-            if dir_x != 0 and dir_y != 0:
-                speed *= 0.70710678  # 1/sqrt(2)
-            desired_vx = dir_x * speed * cfg.CELL_SIZE
-            desired_vy = dir_y * speed * cfg.CELL_SIZE
-            self.move_player(p, desired_vx, desired_vy, dt)
-
-            # 踢炸弹
-            if "kick" in p.abilities and (dir_x != 0 or dir_y != 0):
-                self.try_kick_bomb(p, dir_x, dir_y)
-
-            # 动作键
-            if p.input_action:
-                if "remote" in p.abilities:
-                        self.place_remote_bomb(p)
-                        
-                else:
-                    self.place_normal_bomb(p)
-                p.input_action = False
-
-            if p.input_ignite:
-                if "remote" in p.abilities:
-                    if p.remote_queue:
-                        self.detonate_earliest_remote(p)
-
-            # 腹泻
-            self.check_diarrhea_on_move(p, old_gx, old_gy)
-
-    def get_input_direction(self, p):
-        dx, dy = 0, 0
-        if p.input_up: dy -= 1
-        if p.input_down: dy += 1
-        if p.input_left: dx -= 1
-        if p.input_right: dx += 1
-        count = (p.input_up + p.input_down + p.input_left + p.input_right)
-        if count > 2:
-            return 0, 0
-        return dx, dy
-
-    def move_player(self, p, vx_ps, vy_ps, dt):
-        old_x, old_y = p.pos_x, p.pos_y
-        # X 轴
-        new_x = old_x + vx_ps * dt
-        if not self.player_collision_at(p, new_x, old_y, old_x, old_y):
-            p.pos_x = new_x
-        # Y 轴
-        new_y = old_y + vy_ps * dt
-        if not self.player_collision_at(p, p.pos_x, new_y, old_x, old_y):
-            p.pos_y = new_y
-
-    def player_collision_at(self, p, new_x, new_y, old_x, old_y):
-        half = (cfg.PLAYER_HITBOX_SIZE * cfg.CELL_SIZE) / 2
-        L, R = new_x - half, new_x + half
-        T, B = new_y - half, new_y + half
-
-        # 边界
-        if L < 0 or R > get_map_width() or T < cfg.UI_BAR_HEIGHT or B > get_window_height():
-            return True
-
-        # 地形
-        if "float" in p.abilities:
-            for cell in self.cells_overlapping(L, R, T, B):
-                if self.grid[cell[0]][cell[1]] == "stone":
-                    return True
-        else:
-            for cell in self.cells_overlapping(L, R, T, B):
-                if self.grid[cell[0]][cell[1]] in ("stone", "brick"):
-                    return True
-
-        # 玩家碰撞
-        for other in (self.red_player, self.blue_player):
-            if other is p or not other.alive:
-                continue
-            if box_overlap(L, R, T, B, *other.hitbox()):
-                return True
-
-        # 炸弹：可以离开不能进入（悬浮忽略）
-        if "float" not in p.abilities:
-            for bomb in self.bombs:
-                bgx, bgy = bomb.grid_pos()
-                new_gx, new_gy = pixel_to_grid(new_x, new_y)
-                old_gx, old_gy = pixel_to_grid(old_x, old_y)
-                if (new_gx, new_gy) == (bgx, bgy) and (old_gx, old_gy) != (bgx, bgy):
-                    return True
-        return False
-
-    def cells_overlapping(self, L, R, T, B):
-        cells = set()
-        min_gx = max(1, int(L // cfg.CELL_SIZE) + 1)
-        max_gx = min(cfg.MAP_COLS, int((R - 1) // cfg.CELL_SIZE) + 1)
-        min_gy = max(1, int((T - cfg.UI_BAR_HEIGHT) // cfg.CELL_SIZE) + 1)
-        max_gy = min(cfg.MAP_ROWS, int((B - 1 - cfg.UI_BAR_HEIGHT) // cfg.CELL_SIZE) + 1)
-        for gx in range(min_gx, max_gx + 1):
-            for gy in range(min_gy, max_gy + 1):
-                cells.add((gx, gy))
-        return cells
-
-    # ---------- 踢炸弹 ----------
-    def try_kick_bomb(self, p, dir_x, dir_y):
-        for bomb in self.bombs:
-            if self.player_touches_bomb(p, bomb):
-                self.kick_bomb(bomb, dir_x, dir_y)
-                break
-
-    def player_touches_bomb(self, p, bomb):
-        phalf = (cfg.PLAYER_HITBOX_SIZE * cfg.CELL_SIZE) / 2
-        br = cfg.CELL_SIZE * 0.35
-        return math.hypot(p.pos_x - bomb.pos_x, p.pos_y - bomb.pos_y) < (phalf + br)
-
-    def kick_bomb(self, bomb, dx, dy):
-        bomb.vx = dx * cfg.KICK_INIT_VEL * cfg.CELL_SIZE
-        bomb.vy = dy * cfg.KICK_INIT_VEL * cfg.CELL_SIZE
-
-    # ---------- 放置炸弹 ----------
-    def place_normal_bomb(self, p):
-        if p.bomb_placed_count >= p.bomb_max:
-            return
-        gx, gy = pixel_to_grid(p.pos_x, p.pos_y)
-        if self.is_bomb_at(gx, gy):
-            return
-        self.create_bomb(p, "normal", gx, gy, cfg.BOMB_FUSE)
-
-    def place_remote_bomb(self, p):
-        if p.bomb_placed_count >= p.bomb_max:
-            return
-        gx, gy = pixel_to_grid(p.pos_x, p.pos_y)
-        if self.is_bomb_at(gx, gy):
-            return
-        bomb = self.create_bomb(p, "remote", gx, gy, -1)
-        p.remote_queue.append(bomb.id)
-
-    def create_bomb(self, owner, bomb_type, gx, gy, timer):
-        bomb = Bomb(self.next_bomb_id, owner, bomb_type, gx, gy, timer)
-        self.next_bomb_id += 1
-        self.bombs.append(bomb)
-        owner.bomb_placed_count = self.count_bombs_owned_by(owner)
-        return bomb
-
-    def detonate_earliest_remote(self, p):
-        if not p.remote_queue:
-            return
-        bid = p.remote_queue.pop(0)
-        for bomb in self.bombs:
-            if bomb.id == bid and bomb.owner is p:
-                bomb.exploding = True
-                break
-
-    def is_bomb_at(self, gx, gy):
-        for bomb in self.bombs:
-            if bomb.grid_pos() == (gx, gy):
-                return True
-        return False
-
-    def count_bombs_owned_by(self, owner):
-        return sum(1 for b in self.bombs if b.owner is owner)
-
-    # ---------- 炸弹计时与移动 ----------
-    def update_bomb_timers_and_movement(self, dt):
-        for bomb in self.bombs:
-            if bomb.vx != 0 or bomb.vy != 0:
-                self.move_bomb(bomb, dt)
-            if bomb.type in ("normal", "converted"):
-                if bomb.fuse_frames > 0:
-                    bomb.fuse_frames -= 1
-                    if bomb.fuse_frames <= 0:
-                        bomb.exploding = True
-            if bomb.type == "remote" and "remote" not in bomb.owner.abilities:
-                bomb.type = "converted"
-                bomb.fuse_frames = cfg.BOMB_FUSE
-
-    def move_bomb(self, bomb, dt):
-        bomb.vx += sign(bomb.vx) * cfg.KICK_ACCEL * cfg.CELL_SIZE * dt
-        bomb.vy += sign(bomb.vy) * cfg.KICK_ACCEL * cfg.CELL_SIZE * dt
-        if abs(bomb.vx) < 0.5: bomb.vx = 0
-        if abs(bomb.vy) < 0.5: bomb.vy = 0
-
-        new_x = bomb.pos_x + bomb.vx * dt
-        new_y = bomb.pos_y + bomb.vy * dt
-        if self.bomb_collision_at(bomb, new_x, new_y):
-            self.snap_bomb_to_grid_center(bomb)
-            bomb.vx = bomb.vy = 0
-        else:
-            bomb.pos_x = new_x
-            bomb.pos_y = new_y
-
-    def bomb_collision_at(self, bomb, cx, cy):
-        r = cfg.CELL_SIZE * 0.35
-        if cx - r < 0 or cx + r > get_map_width() or cy - r < cfg.UI_BAR_HEIGHT or cy + r > get_window_height():
-            return True
-        gx, gy = pixel_to_grid(cx, cy)
-        if self.grid[gx][gy] in ("stone", "brick"):
-            return True
-        for p in (self.red_player, self.blue_player):
-            if not p.alive: continue
-            if math.hypot(cx - p.pos_x, cy - p.pos_y) < (cfg.PLAYER_HITBOX_SIZE * cfg.CELL_SIZE / 2 + r):
-                return True
-        for other in self.bombs:
-            if other is bomb: continue
-            if math.hypot(cx - other.pos_x, cy - other.pos_y) < 2 * r:
-                return True
-        return False
-
-    def snap_bomb_to_grid_center(self, bomb):
-        gx, gy = bomb.grid_pos()
-        bomb.pos_x, bomb.pos_y = grid_center(gx, gy)
-
-    # ---------- 爆炸处理（BFS）----------
-    def process_explosions(self):
-        queue = []
-        for bomb in self.bombs:
-            if bomb.exploding and not bomb.exploded:
-                queue.append(bomb)
-                bomb.exploded = True
-
-        all_cells = set()
-        bombs_to_remove = []
-        buffs_to_remove = []
-
-        while queue:
-            bomb = queue.pop(0)
-            cells = self.get_explosion_cells(bomb)
-            all_cells.update(cells)
-            for gx, gy in cells:
-                # 连锁其他炸弹
-                for other in self.bombs:
-                    if not other.exploded and other.grid_pos() == (gx, gy):
-                        queue.append(other)
-                        other.exploded = True
-                        other.exploding = True
-                # 破坏砖块
-                if self.grid[gx][gy] == "brick":
-                    self.grid[gx][gy] = "floor"
-                    if random.random() < cfg.BRICK_DROP_PROB:
-                        self.spawn_buff_at(gx, gy)
-                # 摧毁不受保护的Buff
-                for buff in self.buffs:
-                    if buff.grid_pos() == (gx, gy) and buff.protection_timer <= 0:
-                        if buff not in buffs_to_remove:
-                            buffs_to_remove.append(buff)
-
-        # 清理炸弹
-        for bomb in self.bombs:
-            if bomb.exploded and bomb.exploding:
-                bombs_to_remove.append(bomb)
-        for bomb in bombs_to_remove:
-            for p in (self.red_player, self.blue_player):
-                while bomb.id in p.remote_queue:
-                    p.remote_queue.remove(bomb.id)
-            self.bombs.remove(bomb)
-
-        for buff in buffs_to_remove:
-            if buff in self.buffs:
-                self.buffs.remove(buff)
-
-        for p in (self.red_player, self.blue_player):
-            p.bomb_placed_count = self.count_bombs_owned_by(p)
-
-        self.explosion_cells = all_cells
-
-    def get_explosion_cells(self, bomb):
-        gx, gy = bomb.grid_pos()
-        cells = {(gx, gy)}
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            for i in range(1, bomb.owner.blast_range + 1):
-                nx, ny = gx + dx * i, gy + dy * i
-                if nx < 1 or nx > cfg.MAP_COLS or ny < 1 or ny > cfg.MAP_ROWS:
-                    break
-                cells.add((nx, ny))
-                if self.grid[nx][ny] in ("stone", "brick"):
-                    break
-        return cells
-
-    # ---------- 玩家死亡 ----------
-    def process_player_death(self):
-        for p in (self.red_player, self.blue_player):
-            if not p.alive: continue
-            if p.invincible_timer > 0: continue
-            pgx, pgy = pixel_to_grid(p.pos_x, p.pos_y)
-            if (pgx, pgy) in self.explosion_cells:
-                if "shield" in p.abilities:
-                    del p.abilities["shield"]
-                    p.invincible_timer = cfg.SHIELD_INVINCIBLE_DUR
-                else:
-                    p.alive = False
-                    p.death_timer = cfg.DEATH_ANIM_DUR
-
-    # ---------- Buff拾取 ----------
-    def update_buff_protection(self, dt):
-        for buff in self.buffs:
-            if buff.protection_timer > 0:
-                buff.protection_timer -= 1.0
-
-    def process_buff_pickups(self):
-        for p in (self.red_player, self.blue_player):
-            if not p.alive: continue
-            for buff in self.buffs[:]:
-                if math.hypot(p.pos_x - buff.pos_x, p.pos_y - buff.pos_y) < (cfg.PLAYER_HITBOX_SIZE * cfg.CELL_SIZE / 2 + 8):
-                    self.apply_buff(p, buff)
-                    self.buffs.remove(buff)
-
-    def apply_buff(self, p, buff):
-        if buff.type == "bomb_plus":
-            p.perm_bomb_plus += 1
-            p.bomb_max = min(cfg.INIT_BOMB_MAX + p.perm_bomb_plus, cfg.MAX_BOMB_CAP)
-        elif buff.type == "blast_plus":
-            p.perm_blast_plus += 1
-            p.blast_range = min(cfg.INIT_BLAST_RANGE + p.perm_blast_plus, cfg.MAX_BLAST_RANGE)
-        elif buff.type == "speed_plus":
-            p.perm_speed_plus += 1
-            p.velocity = min(cfg.INIT_SPEED + p.perm_speed_plus * cfg.SPEED_INCREMENT, cfg.MAX_SPEED)
-        elif buff.type == "unknown":
-            ability = buff.unknown_subtype
-            duration = self.get_ability_duration(ability)
-            p.abilities[ability] = duration
-
-    def get_ability_duration(self, ability):
+    def _build_red_actions(self):
         return {
-            "kick": cfg.DURATION_KICK,
-            "remote": cfg.DURATION_REMOTE,
-            "shield": cfg.DURATION_SHIELD,
-            "diarrhea": cfg.DURATION_DIARRHEA,
-            "reverse": cfg.DURATION_REVERSE,
-            "float": cfg.DURATION_FLOAT,
-        }.get(ability, 10)
+            "up": self.keys_red['W'],
+            "down": self.keys_red['S'],
+            "left": self.keys_red['A'],
+            "right": self.keys_red['D'],
+            "action": self.keys_red['E'] and not self.red_player.prev_action,
+            "ignite": self.keys_red['Q'],
+        }
 
-    # ---------- Buff刷新 ----------
-    def update_buff_refresh(self, dt):
-        self.refresh_timer -= 1.0
-        if self.refresh_timer <= 0:
-            self.spawn_random_buff()
-            self.refresh_timer += cfg.REFRESH_INTERVAL
+    def _build_blue_actions(self):
+        return {
+            "up": self.keys_blue['UP'],
+            "down": self.keys_blue['DOWN'],
+            "left": self.keys_blue['LEFT'],
+            "right": self.keys_blue['RIGHT'],
+            "action": self.keys_blue['DEL'] and not self.blue_player.prev_action,
+            "ignite": self.keys_blue['END'],
+        }
 
-    def spawn_random_buff(self):
-        for _ in range(100):
-            gx = random.randint(1, cfg.MAP_COLS)
-            gy = random.randint(1, cfg.MAP_ROWS)
-            if self.grid[gx][gy] == "floor" and not self.is_player_at(gx, gy) and not self.is_bomb_at(gx, gy) and not self.is_buff_at(gx, gy):
-                self.spawn_buff_at(gx, gy)
-                return
-
-    def spawn_buff_at(self, gx, gy):
-        r = random.random()
-        cum = 0
-        weights = [cfg.WEIGHT_BOMB_PLUS, cfg.WEIGHT_BLAST_PLUS, cfg.WEIGHT_SPEED_PLUS, cfg.WEIGHT_UNKNOWN]
-        for i, w in enumerate(weights):
-            cum += w
-            if r < cum:
-                if i == 0:
-                    self.buffs.append(BuffItem("bomb_plus", "", gx, gy))
-                elif i == 1:
-                    self.buffs.append(BuffItem("blast_plus", "", gx, gy))
-                elif i == 2:
-                    self.buffs.append(BuffItem("speed_plus", "", gx, gy))
-                else:
-                    sub = random.choice(["kick", "remote", "shield", "diarrhea", "reverse", "float"])
-                    self.buffs.append(BuffItem("unknown", sub, gx, gy))
-                return
-
-    def is_player_at(self, gx, gy):
-        for p in (self.red_player, self.blue_player):
-            if p.alive and pixel_to_grid(p.pos_x, p.pos_y) == (gx, gy):
-                return True
-        return False
-
-    def is_buff_at(self, gx, gy):
-        for b in self.buffs:
-            if b.grid_pos() == (gx, gy):
-                return True
-        return False
-
-    # ---------- 能力计时器与过期 ----------
-    def update_ability_timers(self, dt):
-        for p in (self.red_player, self.blue_player):
-            for ability in list(p.abilities.keys()):
-                p.abilities[ability] -= 1
-                if p.abilities[ability] <= 0:
-                    self.remove_ability(p, ability)
-            if p.invincible_timer > 0:
-                p.invincible_timer -= 1
-            if not p.alive and p.death_timer > 0:
-                p.death_timer -= 1
-
-    def remove_ability(self, p, ability):
-        if ability not in p.abilities:
-            return
-        del p.abilities[ability]
-        if ability == "remote":
-            p.remote_queue.clear()
-            for bomb in self.bombs:
-                if bomb.owner is p and bomb.type == "remote":
-                    bomb.type = "converted"
-                    bomb.fuse_frames = cfg.BOMB_FUSE
-        elif ability == "float":
-            self.handle_float_end(p)
-
-    def handle_float_end(self, p):
-        gx, gy = pixel_to_grid(p.pos_x, p.pos_y)
-        needs_evict = (self.grid[gx][gy] == "brick") or self.is_bomb_at(gx, gy)
-        if not needs_evict:
-            return
-        candidates = []
-        for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):  # 上,下,左,右
-            nx, ny = gx + dx, gy + dy
-            if nx < 1 or nx > cfg.MAP_COLS or ny < 1 or ny > cfg.MAP_ROWS:
-                continue
-            if self.grid[nx][ny] == "floor" and not self.is_player_at(nx, ny) and not self.is_bomb_at(nx, ny):
-                cx, cy = grid_center(nx, ny)
-                dist = abs(p.pos_x - cx) + abs(p.pos_y - cy)
-                candidates.append((dist, (nx, ny)))
-        if candidates:
-            candidates.sort(key=lambda x: x[0])
-            target_gx, target_gy = candidates[0][1]
-            old_gx, old_gy = pixel_to_grid(p.pos_x, p.pos_y)
-            p.pos_x, p.pos_y = grid_center(target_gx, target_gy)
-            if "diarrhea" in p.abilities:
-                self.check_diarrhea_on_move(p, old_gx, old_gy)
-        else:
-            self.kill_player(p)
-
-    def check_diarrhea_on_move(self, p, old_gx, old_gy):
-        if not p.alive or "diarrhea" not in p.abilities:
-            return
-        new_gx, new_gy = pixel_to_grid(p.pos_x, p.pos_y)
-        if (new_gx, new_gy) != (old_gx, old_gy):
-            if self.grid[new_gx][new_gy] == "floor" and not self.is_bomb_at(new_gx, new_gy):
-                if p.bomb_placed_count < p.bomb_max:
-                    self.create_bomb(p, "normal", new_gx, new_gy, cfg.BOMB_FUSE)
-
-    def kill_player(self, p):
-        p.alive = False
-        p.death_timer = 0
-
-    # ---------- 回合结束 ----------
-    def check_round_end(self):
-        red_alive = self.red_player.alive
-        blue_alive = self.blue_player.alive
-        if red_alive and blue_alive:
-            return
-
-        red_dead = not red_alive
-        blue_dead = not blue_alive
-
-        if red_dead and blue_dead:
-            self.start_round_delay("")
-            return
-
-        if red_dead and blue_alive:
-            if self.red_player.death_timer <= 0:
-                self.blue_player.wins += 1
-                if self.blue_player.wins >= cfg.WIN_SCORE:
-                    self.state = GameState.MATCH_END
-                else:
-                    self.start_round_delay("blue")
-        elif blue_dead and red_alive:
-            if self.blue_player.death_timer <= 0:
-                self.red_player.wins += 1
-                if self.red_player.wins >= cfg.WIN_SCORE:
-                    self.state = GameState.MATCH_END
-                else:
-                    self.start_round_delay("red")
-
-    def start_round_delay(self, winner_id):
-        self.current_winner = winner_id
-        self.state = GameState.ROUND_END_DELAY
-        self.round_delay_timer = cfg.ROUND_DELAY
-
-    def update_round_delay(self, dt):
-        self.round_delay_timer -= 1.0
-        if self.round_delay_timer <= 0:
-            self.reset_round()
+    # Forwarder used by rendering (draw_player looks at input direction)
+    def get_input_direction(self, p):
+        return self.engine._get_input_direction(p)
 
     # ==================== 渲染 ====================
     def render(self):
@@ -1036,13 +533,13 @@ class BombermanGame:
         self.screen.blit(hint, (50, get_window_height() - 80))
         if pygame.mouse.get_pressed()[0]:
             cfg.reset_defaults()
-            self.safe_spots = self.compute_safe_spots()
-            self.reset_match()
+            self.engine.safe_spots = self.engine.compute_safe_spots()
+            self.engine.reset_match()
 
     def handle_settings_click(self, pos):
         cfg.reset_defaults()
-        self.safe_spots = self.compute_safe_spots()
-        self.reset_match()
+        self.engine.safe_spots = self.engine.compute_safe_spots()
+        self.engine.reset_match()
 
     # ==================== 主循环 ====================
     def run(self):
