@@ -10,12 +10,13 @@ from utils import (
     get_window_width, get_window_height,
 )
 from constants import (
-    COLOR_BG, COLOR_TEXT,
+    COLOR_BG,
     GameState,
 )
 from game_engine import GameEngine
 from renderer import Renderer
 from input_handler import InputHandler
+from settings_ui import SettingsUI
 
 # ==================== 主游戏类 ====================
 class BombermanGame:
@@ -28,14 +29,8 @@ class BombermanGame:
         self.clock = pygame.time.Clock()
         self.running = True
         self.input_handler = InputHandler()
-        # 设置面板
-        self.show_settings = False
         self.settings_pause_state = None
-        self.settings_buttons = []
-        self.settings_scroll = 0
-        self.init_settings_ui()
-        # 字体 (settings panel uses self.font_small)
-        self.font_small = pygame.font.Font(None, 18)
+        self.settings_ui = SettingsUI()
 
     # ── Forward game state to engine ──
 
@@ -77,7 +72,7 @@ class BombermanGame:
                     self.input_handler.release(event.key)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if self.state in (GameState.SETTINGS, GameState.SETTINGS_PAUSED):
-                    self.handle_settings_click(event.pos)
+                    self.settings_ui.handle_click(event.pos, self.engine)
 
     def _check_menu_key(self, key):
         """Handle state-transition keys (ENTER, R, P)."""
@@ -121,74 +116,11 @@ class BombermanGame:
     def render(self):
         self.screen.fill(COLOR_BG)
         if self.state in (GameState.SETTINGS, GameState.SETTINGS_PAUSED):
-            self.draw_settings_panel()
+            self.settings_ui.draw(self.screen, self.engine)
         else:
             snapshot = self.engine.get_snapshot()
             self.renderer.draw(snapshot)
         pygame.display.flip()
-
-    # ==================== 设置面板 ====================
-    def init_settings_ui(self):
-        self.param_list = [
-            ("CELL_SIZE", "int", 20, 80),
-            ("MAP_COLS", "int", 13, 25),
-            ("MAP_ROWS", "int", 9, 15),
-            ("BRICK_GEN_PROB", "float", 0.0, 1.0),
-            ("INIT_SPEED", "float", 0.5, 5.0),
-            ("SPEED_INCREMENT", "float", 0.1, 1.0),
-            ("MAX_SPEED", "float", 2.0, 10.0),
-            ("INIT_BOMB_MAX", "int", 1, 10),
-            ("MAX_BOMB_CAP", "int", 1, 15),
-            ("INIT_BLAST_RANGE", "int", 1, 10),
-            ("MAX_BLAST_RANGE", "int", 1, 15),
-            ("BOMB_FUSE", "float", 1.0, 10.0),
-            ("BOMB_FLICKER_START", "float", 0.1, 5.0),
-            ("KICK_INIT_VEL", "float", 1.0, 10.0),
-            ("KICK_ACCEL", "float", -5.0, -0.1),
-            ("DEATH_ANIM_DUR", "float", 0.1, 2.0),
-            ("SHIELD_INVINCIBLE_DUR", "float", 0.1, 2.0),
-            ("WIN_SCORE", "int", 1, 20),
-            ("ROUND_DELAY", "float", 1.0, 10.0),
-            ("BRICK_DROP_PROB", "float", 0.0, 1.0),
-            ("BUFF_PROTECTION_TIME", "float", 0.1, 5.0),
-            ("REFRESH_INTERVAL", "float", 5.0, 60.0),
-            ("WEIGHT_BOMB_PLUS", "float", 0.0, 1.0),
-            ("WEIGHT_BLAST_PLUS", "float", 0.0, 1.0),
-            ("WEIGHT_SPEED_PLUS", "float", 0.0, 1.0),
-            ("WEIGHT_UNKNOWN", "float", 0.0, 1.0),
-            ("DURATION_KICK", "float", 5.0, 60.0),
-            ("DURATION_REMOTE", "float", 5.0, 60.0),
-            ("DURATION_SHIELD", "float", 5.0, 60.0),
-            ("DURATION_DIARRHEA", "float", 5.0, 60.0),
-            ("DURATION_REVERSE", "float", 5.0, 60.0),
-            ("DURATION_FLOAT", "float", 5.0, 60.0),
-        ]
-        self.settings_buttons = []
-
-    def draw_settings_panel(self):
-        panel = pygame.Surface((get_window_width(), get_window_height()), pygame.SRCALPHA)
-        panel.fill((0, 0, 0, 220))
-        self.screen.blit(panel, (0, 0))
-        font = pygame.font.Font(None, 30)
-        y = 20
-        for name, typ, lo, hi in self.param_list:
-            if y > get_window_height() - 100:
-                break
-            val = getattr(cfg, name)
-            text = font.render(f"{name}: {val:.2f}" if typ == "float" else f"{name}: {int(val)}", True, COLOR_TEXT)
-            self.screen.blit(text, (50, y))
-            y += 30
-        hint = self.font_small.render("Press P to close settings. Click anywhere to RESET defaults.", True, COLOR_TEXT)
-        self.screen.blit(hint, (50, get_window_height() - 80))
-        if pygame.mouse.get_pressed()[0]:
-            cfg.reset_defaults()
-            self.engine.safe_spots = self.engine.compute_safe_spots()
-            self.engine.reset_match()
-
-    def handle_settings_click(self, pos):
-        cfg.reset_defaults()
-        self.engine.safe_spots = self.engine.compute_safe_spots()
-        self.engine.reset_match()
 
     # ==================== 主循环 ====================
     def run(self):

@@ -12,6 +12,7 @@
 
 ### 2026-07-01
 - [x] **Task 8: 提取 input_handler.py** — 创建 input_handler.py 模块，包含 InputHandler 类。负责双人按键状态追踪（press/release）、边沿检测扣动（action 键上升沿触发）、build_actions() 生成 (p1_actions, p2_actions) 动作字典。BombermanGame 移除 keys_red/keys_blue/handle_key/sync_input/_build_red_actions/_build_blue_actions，改用 self.input_handler 委托。`_check_menu_key()` 处理状态转换键（ENTER/R/P）。全部 99 测试通过，游戏启动正常。
+- [x] **Task 9: 提取 settings_ui.py** — 创建 settings_ui.py 模块，包含 SettingsUI 类。从 BombermanGame 移出 init_settings_ui()、draw_settings_panel()、handle_settings_click() 及其相关字段。param_list 所有时间参数从 float 秒改为 int 帧（×24），与 config.py 的帧基设计一致。BombermanGame 保留 toggle_settings() 和 settings_pause_state 用于状态管理。全部 99 测试通过。
 - [x] **CLAUDE.md 添加压缩恢复指引** — 要求压缩后先读 hot.md 恢复心智
 - [x] **settings.json 配置三个钩子**
   - `PreCompact` — 压缩前检查进度并更新 hot.md，明确交接细节
@@ -29,7 +30,7 @@
 
 ## 🚧 当前进度
 
-**阶段：AI 系统加入前的结构性重构 — 已完成 Task 1-7**
+**阶段：AI 系统加入前的结构性重构 — 已完成 Task 1-9**
 
 ## 📋 下一步计划
 
@@ -45,8 +46,8 @@
 | `game_state.py` | GameState 枚举 | (合并到 constants) |
 | `game_engine.py` | 纯逻辑引擎（独立于 pygame） | ✅ |
 | `renderer.py` | 所有绘制函数（地图、UI、玩家、炸弹、爆炸等） | ✅ |
-| `input_handler.py` | 键盘输入映射、按键状态同步 | |
-| `settings_ui.py` | 设置面板参数列表绘制与交互 | |
+| `input_handler.py` | 键盘输入映射、按键状态同步 | ✅ |
+| `settings_ui.py` | 设置面板参数列表绘制与交互 | ✅ |
 
 ### 2. AI 系统设计 (第二阶段)
 - 确定 AI 接入点：AI 控制一名玩家的输入 (move/place bomb/ignite)
