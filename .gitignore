@@ -1,31 +1,28 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-dist/
-build/
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.coverage.*
-
-# Local dev / agent docs (not for distribution)
-hot.md
-CLAUDE.md
-.claude/
-whole-branch-review.diff
 
 # Design docs (local planning artifacts)
-docs/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
 # Generated videos (not for distribution)
+# IDE
+# Local dev / agent docs (not for distribution)
+# Python
+# Testing
+*.egg-info/
+*.pyc
+*.pyo
+*.swo
+*.swp
+.claude/
+.coverage
+.coverage.*
+.idea/
+.pytest_cache/
+.vscode/
+CLAUDE.md
+__pycache__/
+build/
+dist/
+docs/
+hot.md
+htmlcov/
+runs/
 videos/
+whole-branch-review.diff

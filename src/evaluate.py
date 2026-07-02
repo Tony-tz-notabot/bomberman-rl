@@ -9,7 +9,6 @@ import time
 from typing import Dict, List, Optional, Any
 import numpy as np
 from src.config import cfg
-from src.constants import CELL_BRICK
 
 
 def evaluate_phase(
@@ -37,8 +36,7 @@ def evaluate_phase(
         seeds = list(range(num_episodes))
 
     # Phase key for composite score lookup
-    phase_key = f"phase_{int(phase * 10)}"
-    phase_key = phase_key.replace(".", "_")
+    phase_key = f"phase_{str(phase).replace('.', '_')}"
 
     all_rewards: List[float] = []
     all_survived: List[float] = []
@@ -94,6 +92,7 @@ def evaluate_phase(
         # Simplification: count buffs placed during episode minus those remaining
         # (a bit loose but acceptable for evaluation trending)
 
+        all_buff_counts.append(buffs_picked)
         all_rewards.append(ep_reward)
         all_survived.append(1.0 if red.alive else 0.0)
         all_final_dist.append(abs(red.grid_x - blue.grid_x) + abs(red.grid_y - blue.grid_y))

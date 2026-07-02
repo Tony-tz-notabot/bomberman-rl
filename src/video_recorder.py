@@ -4,7 +4,7 @@ Records mp4 files from rgb_array frames. Gracefully degrades when
 imageio-ffmpeg is not installed.
 """
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 import numpy as np
 
 
@@ -95,9 +95,4 @@ class VideoRecorder:
         if not frames:
             return False
 
-        try:
-            import imageio
-            imageio.mimsave(path, frames, fps=self.fps)
-            return True
-        except Exception:
-            return False
+        return write_frames(path, frames, self.fps)

@@ -130,3 +130,48 @@
   - `reward_survive` default set to 0.0
   - 6 new tests covering all termination/truncation scenarios
   - 153/153 tests passing
+
+### 2026-07-02 (later)
+- [x] **Task 1: Config file + YAML loader (SDD Phase 1 pipeline)**
+  - `configs/__init__.py` — empty package marker
+  - `scripts/__init__.py` — empty package marker
+  - `configs/phase1_fast.yaml` — full YAML config (run/ppo/network/phases/evaluation/composite_score/progression/checkpoint/logging/device)
+  - `src/config_loader.py` — `load_config()` with validation (9 required top-level keys, phase keys, composite_score keys) + `compute_config_hash()` (SHA256[:16])
+  - `tests/test_config_loader.py` — 5 tests: valid load, missing key error, default file load, hash deterministic, hash changes on diff
+  - Bugfix: YAML phase keys `"1.1"` quoted to prevent float parsing; `3.0e-4` to avoid string parsing issue
+  - 158/158 tests passing (153 existing + 5 new)
+
+### 2026-07-02 (SDD Pipeline - 第一批并行)
+- [x] **Task 6: 依赖文档**
+  - `docs/training_dependencies.md` — 完整设置指南（PyTorch/SB3/视频/头部环境/CUDA）
+  - 测试验证命令和烟雾测试命令
+  - 排除故障表
+- [x] **Task 2: Res-CNN Feature Extractor**
+  - `src/feature_extractor.py` — ResCnnFeatureExtractor(BaseFeaturesExtractor) with ResidualBlock
+  - Conv: 9->32->ResBlock(32)->64->64, flatten, Linear->256, ReLU
+  - HWC->CHW transpose for SB3 CnnPolicy compatibility
+  - `_features_dim=256`, gradient flow verified
+  - `tests/test_feature_extractor.py` — 6 tests all passing
+- [x] **Task 3: Video Recorder**
+  - `src/video_recorder.py` — VideoRecorder class with graceful ffmpeg fallback
+  - Public API: `VideoRecorder(output_dir, fps)`, `.available` property, `.record_episode(env, model, seed, path)`
+  - `write_frames()` standalone function for direct frame-to-mp4 writing
+  - 6 tests: available check (with/without ffmpeg), output dir creation, synthetic frame recording, end-to-end env+model recording, graceful fallback without ffmpeg
+  - 170/170 tests passing (153 existing + 6 new + 5 config + 6 feature_extractor)
+- [x] **Task 4: Evaluation Module** (commit f9f69a4)
+  - `src/evaluate.py` — `evaluate_phase()`, `compute_composite_score()`, `format_metrics()`
+  - Fixed-seed evaluation with per-episode global RNG seeding for deterministic reproduction
+  - Composite score with normalized metrics (survival, approach, illegal action, distance, bomb efficiency, brick destroy, buff pickup, kill rate)
+  - 10 tests covering composite score computation, phase evaluation, metric formatting
+  - 180/180 tests passing (170 existing + 10 new)
+- [x] **Task 5: Main Training Script** (no commit — API error during commit, files created)
+  - `scripts/train_phase1.py` — TrainingPipeline class with:
+    - Phase-aware env factory (\_make_phase_aware_env with SB3-safe reset patching)
+    - PPO + ResCnnFeatureExtractor model creation
+    - Curriculum progression (1.1→1.2→1.3 with min/max steps)
+    - Fixed-seed evaluation with video recording
+    - Checkpoint/resume with config hash validation
+    - Heartbeat logging + failure reports
+    - CLI: --config, --resume, --total-steps-override, --eval-interval, --device, --override-config
+  - `tests/test_training_pipeline.py` — 5 smoke tests including real PPO training
+  - 5/5 smoke tests passing, full suite 185/185 passing
