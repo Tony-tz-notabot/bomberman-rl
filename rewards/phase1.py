@@ -13,7 +13,7 @@ class Phase1Reward(RewardFunction):
         "penalty_retreat": 0.02,
         "penalty_center_dev": 0.04,
         "penalty_stall_threshold": 30, "penalty_stall_init": 0.02, "penalty_stall_cap": 0.5,
-        "penalty_wall": 0.03, "penalty_blocked": 0.02,
+        "penalty_wall": 0.03,
         "reward_survive": 0.001,
         "penalty_illegal_bomb_cap": 0.1,
         "penalty_illegal_ignite": 0.05, "penalty_illegal_dir": 0.05,
