@@ -164,3 +164,93 @@ def test_death_self_bomb(engine):
     # Verify death penalty is the dominant negative component
     assert result < -1.0
     assert result == pytest.approx(-1.7, abs=0.5)
+
+
+# ── Phase 1.2: Bomb placement & brick destruction ──
+
+def test_bomb_placement_reward(engine):
+    """Successful bomb placement gives +0.1."""
+    reward = Phase1Reward({"phase": 1.2})
+    engine.reset_match()
+    prev = engine.get_snapshot()
+    # Place bomb via step
+    engine.step({"action": True}, {"up": False})
+    snap = engine.get_snapshot()
+    r = reward(engine, prev, snap, np.array([0, 0, 0, 0, 1, 0], dtype=np.int8), "red")
+    # Should include +0.1 bomb placement + 0.001 survival (- possible approach/stall)
+    # Near spawn, opponent is far → no approach or stall issues
+    assert r > 0.09  # has at least the bomb placement
+
+
+def test_brick_destruction_forward(engine):
+    """Brick toward opponent gets forward reward; side bricks get side reward."""
+    reward = Phase1Reward({"phase": 1.2})
+    engine.reset_match()
+    engine.state = GameState.ROUND_RUNNING
+
+    # Clear all non-stone cells to floor, then place specific bricks
+    for x in range(1, cfg.MAP_COLS + 1):
+        for y in range(1, cfg.MAP_ROWS + 1):
+            if engine.grid[x][y] != "stone":
+                engine.grid[x][y] = "floor"
+    # Bomb at (3,3) — intersection floor cell (odd, odd)
+    # (4,3) toward opponent (right), (3,4) toward opponent (up), (3,2) side (down)
+    engine.grid[4][3] = "brick"   # toward opponent
+    engine.grid[3][4] = "brick"   # toward opponent
+    engine.grid[3][2] = "brick"   # side (opposite direction from opponent)
+
+    # Place player at bomb position, opponent far right
+    engine.red_player.pos_x, engine.red_player.pos_y = grid_center(3, 3)
+    engine.blue_player.pos_x, engine.blue_player.pos_y = grid_center(18, 10)
+
+    # Place bomb at (3,3) with fuse=1 BEFORE taking prev snapshot
+    from src.models import Bomb
+    bomb = Bomb(engine.next_bomb_id, engine.red_player, "normal", 3, 3, 1)
+    engine.bombs.append(bomb)
+    engine.red_player.bomb_placed_count += 1
+    engine.next_bomb_id += 1
+
+    prev = _take_snap(engine)  # prev now includes the bomb
+
+    # Give shield so player survives own explosion
+    engine.red_player.abilities["shield"] = 100
+
+    # Step: bomb fuse 1→0, explodes, destroys bricks
+    engine.step({"up": False}, {"up": False})
+
+    snap = _take_snap(engine)
+    action = np.zeros(6, dtype=np.int8)
+    r = reward(engine, prev, snap, action, "red")
+
+    # Player survived (shield). Bricks destroyed:
+    # (4,3): from bomb(3,3) → opponent(18,10) => dot=(15,7)·(1,0)=15>0 → forward +0.5
+    # (3,4): from bomb(3,3) → opponent(18,10) => dot=(15,7)·(0,1)=7>0 → forward +0.5
+    # (3,2): from bomb(3,3) → opponent(18,10) => dot=(15,7)·(0,-1)=-7≤0 → side +0.1
+    # Total brick: 1.1. Plus survival 0.001, minus no retreat/stall/wall/illegal.
+    assert r > 0.5  # at minimum one forward brick at +0.5
+
+
+# ── Phase 1.3: Buff pickup ──
+
+def test_buff_pickup_reward(engine):
+    """Picking up a buff gives +0.2."""
+    reward = Phase1Reward({"phase": 1.3})
+    engine.reset_match()
+    # Place a buff near the player
+    from src.models import BuffItem
+    from src.utils import pixel_to_grid
+    gx, gy = pixel_to_grid(engine.red_player.pos_x, engine.red_player.pos_y)
+    # Place at adjacent cell
+    bx, by = gx + 1, gy
+    if engine.grid[bx][by] == "floor":
+        buff = BuffItem("bomb_plus", None, bx, by)
+        engine.buffs.append(buff)
+        prev = engine.get_snapshot()
+        # Move player over the buff
+        engine.red_player.pos_x, engine.red_player.pos_y = grid_center(bx, by)
+        snap = engine.get_snapshot()
+        # Manually trigger pickup
+        engine.process_buff_pickups()
+        snap2 = engine.get_snapshot()
+        r = reward(engine, snap, snap2, np.zeros(6, dtype=np.int8), "red")
+        assert r == pytest.approx(0.2, abs=0.001)  # +0.2 for normal buff + tiny survival
