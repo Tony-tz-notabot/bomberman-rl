@@ -14,7 +14,7 @@ from src.constants import (
     GameState,
     CELL_EMPTY, CELL_STONE, CELL_BRICK, CELL_BUFF, CELL_BOMB, CELL_EXPLOSION,
 )
-from src.utils import grid_to_pixel, grid_center, get_map_width, get_window_height
+from src.utils import grid_to_pixel, grid_center, get_map_width, get_window_width, get_window_height
 from src.models import GameSnapshot
 
 
