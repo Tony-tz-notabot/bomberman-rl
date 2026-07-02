@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import pygame
 import gym
 from gym import spaces
 from typing import Callable, Optional, Tuple
@@ -20,9 +21,9 @@ def build_obs(snapshot: GameSnapshot, agent_id: str) -> np.ndarray:
     agent_id="red" -> self=red, opp=blue
     agent_id="blue" -> self=blue, opp=red
 
-    Returns: (MAP_ROWS, MAP_COLS, 8) float32 array in [0,1].
+    Returns: (MAP_ROWS, MAP_COLS, 9) float32 array in [0,1].
     """
-    obs = np.zeros((cfg.MAP_ROWS, cfg.MAP_COLS, 8), dtype=np.float32)
+    obs = np.zeros((cfg.MAP_ROWS, cfg.MAP_COLS, 9), dtype=np.float32)
 
     # CH0: terrain - 0=empty, 0.5=brick, 1.0=stone
     for x in range(1, cfg.MAP_COLS + 1):
@@ -34,28 +35,24 @@ def build_obs(snapshot: GameSnapshot, agent_id: str) -> np.ndarray:
                 obs[y-1, x-1, 0] = 0.5
             # CELL_EMPTY (0): remains 0.0
 
-    # CH1: Players - Gaussian heatmap, self in [0.1, 0.5], opponent in (0.5, 1.0]
+    # CH1: Self position — full-range Gaussian heatmap [0, 1]
     self_player = snapshot.players[0] if agent_id == snapshot.players[0].id else snapshot.players[1]
     opp_player = snapshot.players[1] if self_player is snapshot.players[0] else snapshot.players[0]
+    obs[:, :, 1] = _gauss_heatmap(self_player.pos_x, self_player.pos_y)
 
-    self_heat = _gauss_heatmap(self_player.pos_x, self_player.pos_y)
-    opp_heat = _gauss_heatmap(opp_player.pos_x, opp_player.pos_y)
-    # Self -> [0.1, 0.5], Opponent -> (0.5, 1.0]
-    # Compare raw gaussian strength to decide which player dominates each cell
-    self_enc = self_heat * 0.4 + 0.1
-    opp_enc = opp_heat * 0.4 + 0.6
-    obs[:, :, 1] = np.where(self_heat >= opp_heat, self_enc, opp_enc)
+    # CH2: Opponent position — full-range Gaussian heatmap [0, 1]
+    obs[:, :, 2] = _gauss_heatmap(opp_player.pos_x, opp_player.pos_y)
 
-    # CH2: Bomb + fuse - value = fuse_frames / BOMB_FUSE
+    # CH3: Bomb + fuse - value = fuse_frames / BOMB_FUSE
     for bomb in snapshot.bombs:
         if bomb.fuse_frames >= 0:
             val = min(bomb.fuse_frames / cfg.BOMB_FUSE, 1.0)
         else:
             val = 1.0  # remote bombs (fuse_frames=-1) show as 1.0
         gy, gx = bomb.grid_y - 1, bomb.grid_x - 1
-        obs[gy, gx, 2] = val
+        obs[gy, gx, 3] = val
 
-    # CH3: Buff + explosion
+    # CH4: Buff + explosion
     # Buff encoding: bomb_plus=0.2, blast_plus=0.35, speed_plus=0.5,
     #               kick=0.65, remote=0.8, shield=0.9, other_ability=1.0
     BUFF_MAP = {
@@ -65,19 +62,19 @@ def build_obs(snapshot: GameSnapshot, agent_id: str) -> np.ndarray:
     for buff in snapshot.buffs:
         val = BUFF_MAP.get(buff.type, 1.0)
         gy, gx = buff.grid_y - 1, buff.grid_x - 1
-        obs[gy, gx, 3] = val
+        obs[gy, gx, 4] = val
     for (gx, gy) in snapshot.explosion_cells:
-        obs[gy-1, gx-1, 3] = 1.0  # explosion overrides buff
+        obs[gy-1, gx-1, 4] = 1.0  # explosion overrides buff
 
-    # CH4: Self abilities (broadcast)
-    _broadcast_abilities(obs[:, :, 4], self_player.abilities)
-    # CH5: Opponent abilities (broadcast)
-    _broadcast_abilities(obs[:, :, 5], opp_player.abilities)
+    # CH5: Self abilities (broadcast)
+    _broadcast_abilities(obs[:, :, 5], self_player.abilities)
+    # CH6: Opponent abilities (broadcast)
+    _broadcast_abilities(obs[:, :, 6], opp_player.abilities)
 
-    # CH6: Self stats (broadcast)
-    _broadcast_stats(obs[:, :, 6], self_player.bomb_placed_count, self_player.bomb_max)
-    # CH7: Opponent stats (broadcast)
-    _broadcast_stats(obs[:, :, 7], opp_player.bomb_placed_count, opp_player.bomb_max)
+    # CH7: Self stats (broadcast)
+    _broadcast_stats(obs[:, :, 7], self_player.bomb_placed_count, self_player.bomb_max)
+    # CH8: Opponent stats (broadcast)
+    _broadcast_stats(obs[:, :, 8], opp_player.bomb_placed_count, opp_player.bomb_max)
 
     return obs
 
@@ -123,13 +120,14 @@ class BombermanEnv(gym.Env):
     Controls the red player; blue player is controlled by opponent_fn.
     """
 
-    metadata = {"render.modes": ["human", "rgb_array"]}
+    metadata = {"render.modes": ["human", "rgb_array"], "render_fps": 24}
 
     def __init__(
         self,
         reward_fn=None,
         opponent_fn: OpponentFn = None,
         penalty_opposing: float = 0.0,
+        render_mode: Optional[str] = None,
     ):
         super().__init__()
         from rewards import RewardFunction
@@ -142,9 +140,27 @@ class BombermanEnv(gym.Env):
 
         self.action_space = spaces.MultiBinary(6)  # [up, down, left, right, action, ignite]
         self.observation_space = spaces.Box(
-            low=0.0, high=1.0, shape=(cfg.MAP_ROWS, cfg.MAP_COLS, 8), dtype=np.float32
+            low=0.0, high=1.0, shape=(cfg.MAP_ROWS, cfg.MAP_COLS, 9), dtype=np.float32
         )
         self._prev_snap = None
+
+        self.render_mode = render_mode
+        self._renderer = None
+        self._screen = None
+
+        if render_mode is not None:
+            import pygame
+            pygame.init()
+            from src.utils import get_window_width, get_window_height
+            w, h = get_window_width(), get_window_height()
+            if render_mode == "human":
+                self._screen = pygame.display.set_mode((w, h), pygame.RESIZABLE)
+                pygame.display.set_caption("Bomberman RL Training")
+            else:  # rgb_array
+                pygame.display.set_mode((1, 1))
+                self._screen = pygame.Surface((w, h))
+            from src.renderer import Renderer
+            self._renderer = Renderer(self._screen)
 
     def reset(
         self,
@@ -248,12 +264,31 @@ class BombermanEnv(gym.Env):
         self.engine.blue_player.reset(*blue_spawn)
         self.engine.safe_spots = {red_spawn, blue_spawn}
 
-    def render(self, mode="human"):
-        """No-op render - environment is headless."""
-        pass
+    def render(self) -> Optional[np.ndarray]:
+        """Render the current game frame.
+
+        Returns:
+            rgb_array: (H, W, 3) uint8 numpy array
+            human: None (display updated via pygame)
+            None: if render_mode is None
+        """
+        if self.render_mode is None:
+            return None
+
+        snap = self.engine.get_snapshot()
+        from src.constants import COLOR_BG
+        self._screen.fill(COLOR_BG)
+        self._renderer.draw(snap)
+
+        if self.render_mode == "human":
+            pygame.display.flip()
+            return None
+        else:  # rgb_array
+            return pygame.surfarray.array3d(self._screen).transpose(1, 0, 2)
 
     def close(self):
-        pass
+        if self.render_mode is not None:
+            pygame.quit()
 
 
 def _random_opponent(snapshot: GameSnapshot, agent_id: str) -> np.ndarray:

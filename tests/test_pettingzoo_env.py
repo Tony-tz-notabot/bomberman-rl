@@ -21,7 +21,7 @@ class TestPettingZooEnv:
         assert isinstance(obs, dict)
         assert set(obs.keys()) == {"red", "blue"}
         for agent, ob in obs.items():
-            assert ob.shape == (cfg.MAP_ROWS, cfg.MAP_COLS, 8)
+            assert ob.shape == (cfg.MAP_ROWS, cfg.MAP_COLS, 9)
             assert ob.dtype == np.float32
 
     def test_pz_step(self):
@@ -67,3 +67,18 @@ class TestPettingZooEnv:
                 break
         # Just verify no crash
         assert True
+
+    def test_pz_render_rgb_array(self):
+        """PettingZoo render(mode="rgb_array") returns valid frame."""
+        try:
+            from pettingzoo_env import BombermanPettingZooEnv
+        except ImportError:
+            pytest.skip("pettingzoo not installed")
+        env = BombermanPettingZooEnv(render_mode="rgb_array")
+        env.reset()
+        frame = env.render()
+        from src.utils import get_window_width, get_window_height
+        assert frame is not None
+        assert frame.shape == (get_window_height(), get_window_width(), 3)
+        assert frame.dtype == np.uint8
+        env.close()

@@ -4,6 +4,7 @@ Wraps GameEngine directly. Both agents' actions come from the training script.
 Imports build_obs from bomberman_env as shared observation builder.
 """
 import numpy as np
+from typing import Optional
 from gym import spaces
 from pettingzoo import ParallelEnv
 
@@ -11,6 +12,7 @@ from src.config import cfg
 from src.constants import GameState
 from src.game_engine import GameEngine
 from src.bomberman_env import build_obs
+from src.renderer import Renderer
 from rewards import RewardFunction
 from rewards.sparse import SparseReward
 
@@ -23,12 +25,13 @@ class BombermanPettingZooEnv(ParallelEnv):
     so CH1 always encodes SELF in [0.1, 0.5] and OPPONENT in (0.5, 1.0].
     """
 
-    metadata = {"render.modes": ["human"], "name": "bomberman_v2_pz"}
+    metadata = {"render.modes": ["human", "rgb_array"], "render_fps": 24, "name": "bomberman_v2_pz"}
 
     def __init__(
         self,
         reward_fn: RewardFunction = None,
         penalty_opposing: float = 0.0,
+        render_mode: Optional[str] = None,
     ):
         super().__init__()
         self.engine = GameEngine()
@@ -44,7 +47,7 @@ class BombermanPettingZooEnv(ParallelEnv):
         }
         obs_space = spaces.Box(
             low=0.0, high=1.0,
-            shape=(cfg.MAP_ROWS, cfg.MAP_COLS, 8),
+            shape=(cfg.MAP_ROWS, cfg.MAP_COLS, 9),
             dtype=np.float32,
         )
         self.observation_spaces = {
@@ -52,6 +55,23 @@ class BombermanPettingZooEnv(ParallelEnv):
             "blue": obs_space,
         }
         self._prev_snap = None
+
+        self.render_mode = render_mode
+        self._renderer = None
+        self._screen = None
+
+        if render_mode is not None:
+            import pygame
+            pygame.init()
+            from src.utils import get_window_width, get_window_height
+            w, h = get_window_width(), get_window_height()
+            if render_mode == "human":
+                self._screen = pygame.display.set_mode((w, h), pygame.RESIZABLE)
+                pygame.display.set_caption("Bomberman PZ Training")
+            else:  # rgb_array
+                pygame.display.set_mode((1, 1))
+                self._screen = pygame.Surface((w, h))
+            self._renderer = Renderer(self._screen)
         self._cumulative_rewards = {a: 0.0 for a in self.agents}
 
     def reset(self, seed=None, options=None):
@@ -177,8 +197,28 @@ class BombermanPettingZooEnv(ParallelEnv):
         self.engine.blue_player.reset(*blue_spawn)
         self.engine.safe_spots = {red_spawn, blue_spawn}
 
-    def render(self, mode="human"):
-        pass
+    def render(self) -> Optional[np.ndarray]:
+        """Render the current game frame.
+
+        Returns:
+            rgb_array: (H, W, 3) uint8 numpy array
+            human: None (display updated via pygame)
+            None: if render_mode is None
+        """
+        if self.render_mode is None:
+            return None
+
+        snap = self.engine.get_snapshot()
+        from src.constants import COLOR_BG
+        self._screen.fill(COLOR_BG)
+        self._renderer.draw(snap)
+
+        if self.render_mode == "human":
+            pygame.display.flip()
+            return None
+        else:  # rgb_array
+            return pygame.surfarray.array3d(self._screen).transpose(1, 0, 2)
 
     def close(self):
-        pass
+        if self.render_mode is not None:
+            pygame.quit()

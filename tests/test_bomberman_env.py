@@ -13,7 +13,7 @@ class TestBombermanEnv:
         env = BombermanEnv()
         obs, info = env.reset()
         assert isinstance(obs, np.ndarray)
-        assert obs.shape == (cfg.MAP_ROWS, cfg.MAP_COLS, 8)
+        assert obs.shape == (cfg.MAP_ROWS, cfg.MAP_COLS, 9)
         assert obs.dtype == np.float32
         assert obs.min() >= 0.0 and obs.max() <= 1.0
         assert env.engine.state == GameState.ROUND_RUNNING
@@ -27,7 +27,7 @@ class TestBombermanEnv:
         grid[cfg.MAP_ROWS-1, cfg.MAP_COLS-1] = 4  # blue spawn at (19, 11)
 
         obs, info = env.reset(options={"grid": grid})
-        assert obs.shape == (cfg.MAP_ROWS, cfg.MAP_COLS, 8)
+        assert obs.shape == (cfg.MAP_ROWS, cfg.MAP_COLS, 9)
         # Verify player spawn positions
         assert env.engine.red_player.pos_x is not None
         assert env.engine.blue_player.pos_x is not None
@@ -49,7 +49,7 @@ class TestBombermanEnv:
         action = np.array([0, 0, 0, 0, 0, 0], dtype=np.int8)
         obs, reward, terminated, truncated, info = env.step(action)
         assert isinstance(obs, np.ndarray)
-        assert obs.shape == (cfg.MAP_ROWS, cfg.MAP_COLS, 8)
+        assert obs.shape == (cfg.MAP_ROWS, cfg.MAP_COLS, 9)
         assert isinstance(reward, float)
         assert isinstance(terminated, bool)
         assert isinstance(truncated, bool)
@@ -116,10 +116,43 @@ class TestBombermanEnv:
         env.reset()
         snap = env.engine.get_snapshot()
         obs = build_obs(snap, "red")
-        assert obs.shape == (cfg.MAP_ROWS, cfg.MAP_COLS, 8)
+        assert obs.shape == (cfg.MAP_ROWS, cfg.MAP_COLS, 9)
         # CH0: terrain should have some non-zero values (stones exist)
         assert (obs[:, :, 0] >= 0).all() and (obs[:, :, 0] <= 1.0).all()
-        # CH1: player channel should have some activity near spawns
-        assert obs[:, :, 1].max() > 0.1, "Player heatmap should have values"
+        # CH1: self position — should have activity near red spawn
+        assert obs[:, :, 1].max() > 0.1, "Self heatmap should have values"
+        # CH2: opponent position — should also have activity
+        assert obs[:, :, 2].max() > 0.1, "Opponent heatmap should have values"
         # All values in [0, 1]
         assert obs.min() >= 0.0 and obs.max() <= 1.0
+
+    def test_render_rgb_array(self):
+        """render(mode="rgb_array") returns (H, W, 3) uint8 array."""
+        env = BombermanEnv(render_mode="rgb_array")
+        env.reset()
+        frame = env.render()
+        from src.utils import get_window_width, get_window_height
+        assert frame is not None
+        assert isinstance(frame, np.ndarray)
+        assert frame.shape == (get_window_height(), get_window_width(), 3)
+        assert frame.dtype == np.uint8
+        env.close()
+
+    def test_render_none(self):
+        """render_mode=None returns None from render()."""
+        env = BombermanEnv(render_mode=None)
+        env.reset()
+        assert env.render() is None
+        env.close()
+
+    def test_render_multiple_frames(self):
+        """Multiple render() calls return consistent frames."""
+        env = BombermanEnv(render_mode="rgb_array")
+        env.reset()
+        for _ in range(5):
+            action = np.random.randint(0, 2, size=6, dtype=np.int8)
+            env.step(action)
+            frame = env.render()
+            assert frame is not None
+            assert frame.shape[2] == 3  # RGB
+        env.close()
