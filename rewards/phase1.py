@@ -15,7 +15,7 @@ class Phase1Reward(RewardFunction):
         "penalty_stall_threshold": 30, "penalty_stall_init": 0.02, "penalty_stall_cap": 0.5,
         "penalty_wall": 0.03, "penalty_blocked": 0.02,
         "reward_survive": 0.001,
-        "penalty_illegal_bomb_cap": 0.1, "penalty_illegal_place": 0.05,
+        "penalty_illegal_bomb_cap": 0.1,
         "penalty_illegal_ignite": 0.05, "penalty_illegal_dir": 0.05,
         "penalty_death_self": 1.0, "penalty_death_opp": 0.5,
         "penalty_death_self_bomb": 3.0, "penalty_death_opp_bomb": 1.5,
@@ -56,7 +56,7 @@ class Phase1Reward(RewardFunction):
         reward += w["p11"] * self._center_deviation(curr_self)
         reward += w["p11"] * self._stall(curr_mdist)
         reward += w["p11"] * self._wall_collision(action[:4], prev_self, curr_self)
-        reward += w["p11"] * self._illegal_action(action[4], action[5], prev_self, curr_self)
+        reward += w["p11"] * self._illegal_action(action[4], action[5], action[:4], prev_self, curr_self)
         reward += w["p11"] * self._death(prev_self, prev_snap, snap, agent_id)
         if w["p12"] > 0:
             reward += w["p12"] * self._bomb_placement(prev_self, curr_self)
@@ -126,12 +126,14 @@ class Phase1Reward(RewardFunction):
             reward -= self.cfg["penalty_wall"]
         return reward
 
-    def _illegal_action(self, action_val, ignite_val, prev_self, curr_self) -> float:
+    def _illegal_action(self, action_val, ignite_val, dir4, prev_self, curr_self) -> float:
         reward = 0.0
         if action_val and curr_self.bomb_placed_count == prev_self.bomb_placed_count:
             reward -= self.cfg["penalty_illegal_bomb_cap"]
         if ignite_val:
             reward -= self.cfg["penalty_illegal_ignite"]
+        if sum(dir4) > 2:
+            reward -= self.cfg["penalty_illegal_dir"]
         return reward
 
     def _death(self, prev_self, prev_snap, snap, agent_id) -> float:

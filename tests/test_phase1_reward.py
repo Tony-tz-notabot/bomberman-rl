@@ -67,6 +67,31 @@ def test_approach_window(engine, p1_reward):
     assert final_reward <= 0.001 + 0.001  # only survival +/- retreat
 
 
+def test_approach_reward_positive(engine, p1_reward):
+    """When window average moves toward opponent, approach reward fires."""
+    # Place player far from opponent
+    engine.red_player.pos_x, engine.red_player.pos_y = 100, cfg.UI_BAR_HEIGHT + 100
+    engine.blue_player.pos_x, engine.blue_player.pos_y = 700, cfg.UI_BAR_HEIGHT + 100
+    snap0 = engine.get_snapshot()
+    action = np.zeros(6, dtype=np.int8)
+
+    # Move toward opponent across cells (40px per cell, move 50px to cross 1+ cells)
+    for i in range(p1_reward.cfg["reward_approach_window"]):
+        engine.red_player.pos_x += 5  # 5px/frame for 10 frames = 50px (>1 cell)
+        snap = engine.get_snapshot()
+        _ = p1_reward(engine, snap0, snap, action, "red")
+        snap0 = snap
+
+    # After window fills, the last call should have had approach reward
+    # Survival alone = 0.001. Approach reward adds on top.
+    # Move one more frame and capture the reward
+    engine.red_player.pos_x += 5
+    snap = engine.get_snapshot()
+    final_reward = p1_reward(engine, snap0, snap, action, "red")
+    # Should include approach reward (>0.001 survival alone)
+    assert final_reward > 0.001
+
+
 def test_center_deviation_off_center(engine, p1_reward):
     """Player far from corridor center gets penalty."""
     # Place on center of a horizontal corridor cell
@@ -112,18 +137,30 @@ def test_death_self_bomb(engine):
     """Death by own bomb gets self-death penalty."""
     reward = Phase1Reward({"phase": 1.2})
     engine.reset_match()
-    # Place a bomb directly under player
     from src.utils import pixel_to_grid
     gx, gy = pixel_to_grid(engine.red_player.pos_x, engine.red_player.pos_y)
-    engine.grid[gx][gy] = "floor"  # ensure floor for bomb placement
-    # Manually create bomb with fuse=1
+    engine.grid[gx][gy] = "floor"
     from src.models import Bomb
     bomb = Bomb(engine.next_bomb_id, engine.red_player, "normal", gx, gy, 1)
     engine.bombs.append(bomb)
     engine.next_bomb_id += 1
     engine.red_player.bomb_placed_count += 1
-    # Step 2 frames: bomb explodes → player dies
+
+    prev = engine.get_snapshot()
+
+    # Step: bomb explodes, player dies
     for _ in range(3):
         engine.step({"up": False}, {"up": False})
     snap = engine.get_snapshot()
+
     assert not snap.players[0].alive  # red died
+
+    # Now test the reward function
+    action = np.zeros(6, dtype=np.int8)
+    result = reward(engine, prev, snap, action, "red")
+    # Death by own bomb in phase 1.2 component returns -3.0, multiplied by p11 weight 0.5 = -1.5
+    # Wasted bomb penalty: -0.2 * 1.0 (p12 weight) = -0.2
+    # Total: ~ -1.7 (plus negligible approach/retreat from position change)
+    # Verify death penalty is the dominant negative component
+    assert result < -1.0
+    assert result == pytest.approx(-1.7, abs=0.5)

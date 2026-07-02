@@ -648,7 +648,7 @@ class GameEngine:
         def _bsnap(b):
             gx, gy = pixel_to_grid(b.pos_x, b.pos_y)
             return BombSnapshot(
-                id=b.id, owner=b.owner, type=b.type,
+                id=b.id, owner=b.owner.id, type=b.type,
                 pos_x=b.pos_x, pos_y=b.pos_y,
                 grid_x=gx, grid_y=gy,
                 fuse_frames=b.fuse_frames,
