@@ -254,3 +254,57 @@ def test_buff_pickup_reward(engine):
         snap2 = engine.get_snapshot()
         r = reward(engine, snap, snap2, np.zeros(6, dtype=np.int8), "red")
         assert r == pytest.approx(0.2, abs=0.001)  # +0.2 for normal buff + tiny survival
+
+
+# ── Phase weight transition ──
+
+def test_phase_12_weights(engine):
+    """Phase 1.2 has P1.1 rewards halved and P1.2 rewards at full."""
+    p11 = Phase1Reward({"phase": 1.1, "reward_approach": 0, "penalty_retreat": 0,
+                        "penalty_center_dev": 0, "penalty_wall": 0, "penalty_blocked": 0,
+                        "penalty_illegal_bomb_cap": 0,
+                        "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0,
+                        "penalty_death_self": 0, "penalty_death_opp": 0,
+                        "penalty_death_self_bomb": 0, "penalty_death_opp_bomb": 0,
+                        "reward_place_bomb": 0.1, "reward_destroy_brick_fwd": 0,
+                        "reward_destroy_brick_side": 0, "penalty_bomb_wasted": 0,
+                        "reward_pickup_normal": 0, "reward_pickup_unknown": 0})
+    p12 = Phase1Reward({"phase": 1.2, "reward_approach": 0, "penalty_retreat": 0,
+                        "penalty_center_dev": 0, "penalty_wall": 0, "penalty_blocked": 0,
+                        "penalty_illegal_bomb_cap": 0,
+                        "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0,
+                        "penalty_death_self": 1.0, "penalty_death_opp": 0.5,
+                        "penalty_death_self_bomb": 3.0, "penalty_death_opp_bomb": 1.5,
+                        "reward_place_bomb": 0.1, "reward_destroy_brick_fwd": 0,
+                        "reward_destroy_brick_side": 0, "penalty_bomb_wasted": 0,
+                        "reward_pickup_normal": 0, "reward_pickup_unknown": 0})
+    engine.reset_match()
+    snap = engine.get_snapshot()
+    action = np.zeros(6, dtype=np.int8)
+    r11 = p11(engine, snap, snap, action, "red")
+    r12 = p12(engine, snap, snap, action, "red")
+    # p11: 0.001 survival
+    assert r11 == 0.001
+    # p12: 0.001 * 0.5 = 0.0005 survival
+    assert r12 == 0.0005
+
+
+def test_env_with_phase1_reward():
+    """BombermanEnv with Phase1Reward steps without error."""
+    import numpy as np
+    from src.bomberman_env import BombermanEnv
+    from rewards.phase1 import Phase1Reward
+
+    env = BombermanEnv(reward_fn=Phase1Reward({"phase": 1.1}))
+    obs, _ = env.reset()
+    assert obs.shape == (11, 19, 9)
+
+    total_reward = 0.0
+    for _ in range(50):
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+        total_reward += reward
+        if terminated:
+            break
+    # Reward should be finite
+    assert np.isfinite(total_reward)

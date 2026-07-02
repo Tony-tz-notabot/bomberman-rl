@@ -21,6 +21,10 @@ from stable_baselines3.common.callbacks import EvalCallback
 from src.bomberman_env import BombermanEnv
 from rewards.sparse import SparseReward
 
+# Phase 1 curriculum reward (uncomment to use):
+# from rewards.phase1 import Phase1Reward
+# reward_fn = Phase1Reward({"phase": 1.2, "reward_approach": 0.1})
+
 
 # ── Custom opponent strategies ──
 
