@@ -20,6 +20,7 @@ class Phase1Reward(RewardFunction):
         "penalty_death_self": 1.0, "penalty_death_opp": 0.5,
         "penalty_death_self_bomb": 3.0, "penalty_death_opp_bomb": 1.5,
         "reward_place_bomb": 0.1,
+        "reward_kill_opponent": 4.0,
         "reward_destroy_brick_fwd": 0.5, "reward_destroy_brick_side": 0.1,
         "penalty_bomb_wasted": 0.2,
         "reward_pickup_normal": 0.2, "reward_pickup_unknown": 0.3,
@@ -62,6 +63,7 @@ class Phase1Reward(RewardFunction):
             reward += w["p12"] * self._bomb_placement(prev_self, curr_self)
             reward += w["p12"] * self._brick_destruction(prev_snap, snap, agent_id)
             reward += w["p12"] * self._wasted_bomb(prev_snap, snap, agent_id)
+            reward += w["p12"] * self._kill_opponent(prev_snap, snap, agent_id)
         if w["p13"] > 0:
             reward += w["p13"] * self._buff_pickup(prev_snap, snap, agent_id)
         self._prev_mdist = curr_mdist
@@ -224,6 +226,14 @@ class Phase1Reward(RewardFunction):
                     bricks_destroyed += 1
         if bricks_destroyed == 0:
             return -self.cfg["penalty_bomb_wasted"] * len(our_exploded)
+        return 0.0
+
+    def _kill_opponent(self, prev_snap, snap, agent_id) -> float:
+        """+4.0 when the opponent dies this frame (agent survives)."""
+        opp_snap = snap.players[1] if snap.players[0].id == agent_id else snap.players[0]
+        prev_opp = prev_snap.players[1] if prev_snap.players[0].id == agent_id else prev_snap.players[0]
+        if prev_opp.alive and not opp_snap.alive:
+            return self.cfg["reward_kill_opponent"]
         return 0.0
 
     # ── Phase 1.3: Buff pickup ──

@@ -230,6 +230,41 @@ def test_brick_destruction_forward(engine):
     assert r > 0.5  # at minimum one forward brick at +0.5
 
 
+def test_kill_opponent_reward(engine):
+    """Killing the opponent gives +4.0 reward."""
+    reward = Phase1Reward({"phase": 1.2,
+        "reward_approach": 0, "penalty_retreat": 0,
+        "penalty_center_dev": 0, "penalty_wall": 0,
+        "penalty_illegal_bomb_cap": 0, "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0,
+        "penalty_death_self": 0, "penalty_death_opp": 0,
+        "penalty_death_self_bomb": 0, "penalty_death_opp_bomb": 0,
+        "reward_place_bomb": 0, "reward_destroy_brick_fwd": 0,
+        "reward_destroy_brick_side": 0, "penalty_bomb_wasted": 0,
+        "reward_pickup_normal": 0, "reward_pickup_unknown": 0})
+    engine.reset_match()
+    # Place opponent on a cell adjacent to the player
+    engine.blue_player.pos_x, engine.blue_player.pos_y = grid_center(2, 1)
+    from src.models import Bomb
+    bomb = Bomb(engine.next_bomb_id, engine.red_player, "normal", 2, 1, 1)
+    engine.bombs.append(bomb)
+    engine.red_player.bomb_placed_count += 1
+    engine.next_bomb_id += 1
+    # Shield agent to survive own blast
+    engine.red_player.abilities["shield"] = 100
+
+    prev = _take_snap(engine)
+
+    # Step: bomb explodes, opponent dies, agent survives
+    engine.step({"up": False}, {"up": False})
+    snap = _take_snap(engine)
+
+    assert snap.players[1].alive is False  # blue died
+    assert snap.players[0].alive is True   # red survived
+
+    r = reward(engine, prev, snap, np.zeros(6, dtype=np.int8), "red")
+    assert r == pytest.approx(4.0, abs=0.01)
+
+
 # ── Phase 1.3: Buff pickup ──
 
 def test_buff_pickup_reward(engine):
