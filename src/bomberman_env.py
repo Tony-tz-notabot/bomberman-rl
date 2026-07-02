@@ -129,6 +129,7 @@ class BombermanEnv(gym.Env):
         reward_fn=None,
         opponent_fn: OpponentFn = None,
         penalty_opposing: float = 0.0,
+        timeout_frames: Optional[int] = None,
         render_mode: Optional[str] = None,
     ):
         super().__init__()
@@ -145,6 +146,9 @@ class BombermanEnv(gym.Env):
             low=0.0, high=1.0, shape=(cfg.MAP_ROWS, cfg.MAP_COLS, 9), dtype=np.float32
         )
         self._prev_snap = None
+        self.timeout_frames = 5400 if timeout_frames is None else timeout_frames
+        self._episode_frame = 0
+        self._phase = 1.1
 
         self.render_mode = render_mode
         self._renderer = None
@@ -177,6 +181,8 @@ class BombermanEnv(gym.Env):
             self._init_phase(float(options["phase"]))
         else:
             self.engine.reset_match()
+            self._episode_frame = 0
+            self._phase = 1.1
         snap = self.engine.get_snapshot()
         self._prev_snap = snap
         self.reward_fn.reset({"seed": seed})
@@ -208,9 +214,49 @@ class BombermanEnv(gym.Env):
             if (action[0] and action[1]) or (action[2] and action[3]):
                 reward += self.penalty_opposing
 
+        self._episode_frame += 1
+
+        # Phase 1.1 success detection: red within Chebyshev distance <= 1 of blue
+        red_player = snapshot.players[0]
+        blue_player = snapshot.players[1]
+        is_phase_11 = int(self._phase * 10) == 11
+
+        red_dead = not red_player.alive
+        blue_dead = not blue_player.alive
+
+        # Check Phase 1.1 reach success
+        phase_11_success = False
+        if is_phase_11 and red_player.alive:
+            dist = max(abs(red_player.grid_x - blue_player.grid_x),
+                       abs(red_player.grid_y - blue_player.grid_y))
+            if dist <= 1:
+                phase_11_success = True
+
+        # Termination detection
+        if is_phase_11:
+            terminated = phase_11_success or red_dead or blue_dead
+        else:
+            terminated = red_dead or blue_dead
+
+        if snapshot.state == GameState.MATCH_END:
+            terminated = True
+
+        # Timeout truncation - suppress termination rewards/penalties
+        truncated = self._episode_frame >= self.timeout_frames
+        if truncated and terminated:
+            # Death AND timeout on same frame (rare). Terminated takes priority.
+            pass
+        elif truncated:
+            # Pure timeout: keep per-frame reward, no termination rewards/penalties
+            # Success bonus not added (dead/alive check follows)
+            pass
+
+        # Add Phase 1.1 success reward only on successful reach termination
+        if phase_11_success and not (red_dead or blue_dead):
+            # Red reached blue alive and well -> +1 success bonus
+            reward += 1.0
+
         obs = build_obs(snapshot, "red")
-        terminated = snapshot.state == GameState.MATCH_END
-        truncated = False
         info = {}
 
         self._prev_snap = snapshot
@@ -252,6 +298,9 @@ class BombermanEnv(gym.Env):
         self.engine.blue_player.reset(*result["blue_spawn"])
         self.engine.safe_spots = result["safe_spots"]
 
+        self._episode_frame = 0
+        self._phase = phase
+
     def _init_from_matrix(self, matrix: np.ndarray):
         """Initialize map from a (MAP_ROWS, MAP_COLS) matrix.
 
@@ -292,6 +341,9 @@ class BombermanEnv(gym.Env):
         self.engine.red_player.reset(*red_spawn)
         self.engine.blue_player.reset(*blue_spawn)
         self.engine.safe_spots = {red_spawn, blue_spawn}
+
+        self._episode_frame = 0
+        self._phase = 1.1
 
     def render(self) -> Optional[np.ndarray]:
         """Render the current game frame.
