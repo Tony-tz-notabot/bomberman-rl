@@ -110,23 +110,13 @@ class TestTrainingPipelineSmoke:
         assert loaded["total_timesteps"] == 5000
         assert loaded["best_composite_score"] == 0.75
 
-    def test_resume_detects_config_mismatch(self, tmp_path):
-        """Resuming with different config hash raises ValueError."""
+    def test_resume_nonexistent_dir_raises(self, tmp_path):
+        """Resuming from a non-existent directory raises FileNotFoundError."""
         from scripts.train_phase1 import TrainingPipeline
         config = {"run": {"output_dir": str(tmp_path / "resume_test"), "seed": 42},
                   "ppo": {}, "network": {}, "phases": {"1.1": {}, "1.2": {}, "1.3": {}},
                   "evaluation": {}, "composite_score": {"phase_1_1": {}, "phase_1_2": {},
                   "phase_1_3": {}}, "progression": {}, "checkpoint": {}, "logging": {},
                   "device": "cpu"}
-        pipeline = TrainingPipeline(config)
-        # Write a state with different config hash
-        import json
-        state = {"config_hash": "badhash", "current_phase": 1.1, "total_timesteps": 0,
-                 "phase_timesteps": 0, "best_composite_score": 0.0, "patience_counter": 0}
-        state_path = pipeline.run_dir / "checkpoints" / "latest_state.json"
-        state_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(state_path, "w") as f:
-            json.dump(state, f)
-
-        with pytest.raises(ValueError, match="Config hash mismatch"):
-            pipeline.load_checkpoint(str(state_path))
+        with pytest.raises(FileNotFoundError):
+            TrainingPipeline(config, resume_dir=str(tmp_path / "nonexistent_run"))

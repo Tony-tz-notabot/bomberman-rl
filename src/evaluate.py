@@ -35,6 +35,12 @@ def evaluate_phase(
     if seeds is None:
         seeds = list(range(num_episodes))
 
+    # Seed global RNGs at function level for overall reproducibility
+    # (env.reset handles per-episode seeding; this covers opponent_fn
+    #  and other global RNG consumers that the env cannot control)
+    _random_mod.seed(seeds[0])
+    np.random.seed(seeds[0])
+
     # Phase key for composite score lookup
     phase_key = f"phase_{str(phase).replace('.', '_')}"
 
@@ -50,9 +56,6 @@ def evaluate_phase(
 
     for ep_idx in range(num_episodes):
         seed = seeds[ep_idx]
-        # Seed global RNGs for deterministic opponent and engine behavior
-        _random_mod.seed(seed)
-        np.random.seed(seed)
         obs, _ = env.reset(options={"phase": phase}, seed=seed)
 
         # Snapshot the grid before any actions to count brick destruction
@@ -117,6 +120,13 @@ def evaluate_phase(
         "mean_episode_length": float(np.mean(all_lengths)),
         "timestamp": time.time(),
     }
+
+    # Add normalized_approach proxy if not already present
+    if "normalized_approach" not in metrics:
+        max_dist = cfg.MAP_COLS + cfg.MAP_ROWS
+        metrics["normalized_approach"] = max(
+            0.0, 1.0 - metrics.get("mean_final_distance_to_blue", float(max_dist)) / max_dist
+        )
 
     # Compute composite score
     weights = config.get("composite_score", {}).get(phase_key, {})

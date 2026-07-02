@@ -121,9 +121,11 @@ def load_state(path: str) -> Dict[str, Any]:
 class TrainingPipeline:
     """Orchestrates curriculum progression, evaluation, checkpointing, and logging."""
 
-    def __init__(self, config: Dict[str, Any], resume_dir: Optional[str] = None):
+    def __init__(self, config: Dict[str, Any], resume_dir: Optional[str] = None,
+                 override_config: bool = False):
         self.config = config
         self.config_hash = compute_config_hash(config)
+        self.override_config = override_config
 
         # Create run directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -206,7 +208,7 @@ class TrainingPipeline:
         saved_hash = state.get("config_hash", "")
 
         # Config hash mismatch check
-        if saved_hash and saved_hash != self.config_hash:
+        if not self.override_config and saved_hash and saved_hash != self.config_hash:
             logger.warning(f"Config hash mismatch: saved={saved_hash}, current={self.config_hash}")
             logger.warning("Pass --override-config to bypass this check.")
             raise ValueError(
@@ -342,7 +344,8 @@ class TrainingPipeline:
         for i, seed in enumerate(seeds):
             out_path = video_dir / f"{step_str}_seed_{seed:03d}.mp4"
             success = recorder.record_episode(
-                video_env, self.model, seed=seed, path=str(out_path)
+                video_env, self.model, seed=seed, path=str(out_path),
+                phase=self.current_phase,
             )
             if success:
                 logger.info(f"Video saved: {out_path}")
@@ -418,6 +421,7 @@ class TrainingPipeline:
         current_idx = phases.index(self.current_phase)
         if current_idx >= len(phases) - 1:
             logger.info("All phases complete!")
+            self.current_phase = 2.0  # sentinel past 1.3 so outer loop exits
             return
 
         next_phase = phases[current_idx + 1]
@@ -466,7 +470,8 @@ class TrainingPipeline:
                 remaining = phase_limit - self.phase_timesteps
                 # Train in chunks for responsiveness
                 chunk = min(eval_interval, remaining)
-                self.model.learn(total_timesteps=chunk, reset_num_timesteps=False)
+                self.model.learn(total_timesteps=chunk, reset_num_timesteps=False,
+                                 tb_log_name=f"phase_{int(self.current_phase * 10)}")
                 self.total_timesteps += chunk
                 self.phase_timesteps += chunk
 
@@ -488,7 +493,6 @@ class TrainingPipeline:
             # Phase ended (either advanced or max_steps reached without advancing)
             if self.current_phase >= 1.3 and self.phase_timesteps >= phase_limit:
                 logger.info("Phase 1.3 complete. Training finished.")
-                self._save_checkpoint("final")
                 break
 
         logger.info("Training pipeline complete.")
@@ -501,20 +505,6 @@ class TrainingPipeline:
 
         if self.env is not None:
             self.env.close()
-
-    def load_checkpoint(self, state_path: str):
-        """Load checkpoint state and validate config hash."""
-        state = load_state(state_path)
-        saved_hash = state.get("config_hash", "")
-        if saved_hash and saved_hash != self.config_hash:
-            raise ValueError(
-                f"Config hash mismatch: saved={saved_hash}, current={self.config_hash}"
-            )
-        self.current_phase = state["current_phase"]
-        self.total_timesteps = state["total_timesteps"]
-        self.phase_timesteps = state["phase_timesteps"]
-        self.best_composite_score = state["best_composite_score"]
-        self.patience_counter = state["patience_counter"]
 
 
 def main():
@@ -561,7 +551,8 @@ def main():
     if args.device != "auto":
         config["device"] = args.device
 
-    pipeline = TrainingPipeline(config, resume_dir=args.resume)
+    pipeline = TrainingPipeline(config, resume_dir=args.resume,
+                                 override_config=args.override_config)
     pipeline.run()
 
 

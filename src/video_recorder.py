@@ -62,7 +62,8 @@ class VideoRecorder:
     def available(self) -> bool:
         return self._available
 
-    def record_episode(self, env, model, seed: int, path: str) -> bool:
+    def record_episode(self, env, model, seed: int, path: str,
+                       phase: float = 1.1) -> bool:
         """Run one deterministic evaluation episode and record video.
 
         Args:
@@ -70,6 +71,7 @@ class VideoRecorder:
             model: SB3 policy model.
             seed: Environment seed for reproducibility.
             path: Full output path for the mp4 file.
+            phase: Phase to use for env reset (default 1.1).
 
         Returns:
             True if video was written, False if unavailable or failed.
@@ -78,7 +80,7 @@ class VideoRecorder:
             return False
 
         frames: List[np.ndarray] = []
-        obs, _ = env.reset(options={"phase": 1.1}, seed=seed)
+        obs, _ = env.reset(options={"phase": phase}, seed=seed)
         frame = env.render()
         if frame is not None:
             frames.append(frame)
