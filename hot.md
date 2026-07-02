@@ -123,9 +123,10 @@
   - 全套 147 测试通过，计划评审干净
 
 ### 2026-07-02
-- [x] **Phase-aware Episode Termination**
+- [x] **Phase-aware Episode Termination (commit cbfda70)**
   - Phase 1.1: red reaches blue (Chebyshev ≤ 1) → terminated + +1 reward
   - Phase 1.2/1.3: death → terminated (existing death/kill rewards)
   - Timeout: truncated, per-frame reward kept, no termination bonuses
   - `reward_survive` default set to 0.0
   - 6 new tests covering all termination/truncation scenarios
+  - 153/153 tests passing
