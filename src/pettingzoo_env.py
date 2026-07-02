@@ -4,6 +4,7 @@ Wraps GameEngine directly. Both agents' actions come from the training script.
 Imports build_obs from bomberman_env as shared observation builder.
 """
 import numpy as np
+import pygame
 from typing import Optional
 from gym import spaces
 from pettingzoo import ParallelEnv

@@ -9,7 +9,7 @@ class TestPettingZooEnv:
     def _make_env(self):
         """Helper to create the env, skipping if pettingzoo is not installed."""
         try:
-            from pettingzoo_env import BombermanPettingZooEnv
+            from src.pettingzoo_env import BombermanPettingZooEnv
         except ImportError:
             pytest.skip("pettingzoo not installed")
         return BombermanPettingZooEnv()
@@ -71,7 +71,7 @@ class TestPettingZooEnv:
     def test_pz_render_rgb_array(self):
         """PettingZoo render(mode="rgb_array") returns valid frame."""
         try:
-            from pettingzoo_env import BombermanPettingZooEnv
+            from src.pettingzoo_env import BombermanPettingZooEnv
         except ImportError:
             pytest.skip("pettingzoo not installed")
         env = BombermanPettingZooEnv(render_mode="rgb_array")
