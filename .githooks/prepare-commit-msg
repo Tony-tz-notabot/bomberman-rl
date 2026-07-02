@@ -1,0 +1,8 @@
+#!/bin/sh
+# Auto-add Co-authored-by trailer for every commit
+COMMIT_MSG_FILE=$1
+# Only append if not already present (avoids duplication on --amend etc.)
+if ! grep -q "Co-authored-by: samurazdenko" "$COMMIT_MSG_FILE" 2>/dev/null; then
+    echo "" >> "$COMMIT_MSG_FILE"
+    echo "Co-authored-by: samurazdenko <samurazdenko@gmail.com>" >> "$COMMIT_MSG_FILE"
+fi
