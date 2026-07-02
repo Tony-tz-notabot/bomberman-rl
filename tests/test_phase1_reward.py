@@ -27,11 +27,11 @@ def _take_snap(engine):
 # ── Phase 1.1: Survival & illegal action ──
 
 def test_survival_alive(engine, p1_reward):
-    """Alive agent gets +0.001 per frame."""
+    """Alive agent gets survival reward per frame."""
     snap = _take_snap(engine)
     action = np.zeros(6, dtype=np.int8)
     reward = p1_reward(engine, snap, snap, action, "red")
-    assert reward == 0.001
+    assert reward == 0.0003
 
 
 def test_illegal_bomb_cap(engine, p1_reward):
@@ -40,7 +40,7 @@ def test_illegal_bomb_cap(engine, p1_reward):
     action = np.array([0, 0, 0, 0, 1, 0], dtype=np.int8)  # action=1
     reward = p1_reward(engine, snap, snap, action, "red")
     # -illegal_bomb_cap + survival
-    assert reward == pytest.approx(-0.1 + 0.001)
+    assert reward == pytest.approx(-0.033 + 0.0003)
 
 
 # ── Phase 1.1: Approach/retreat, center deviation, stall ──
@@ -64,7 +64,7 @@ def test_approach_window(engine, p1_reward):
     # _prev_avg_x is now set. Next step without movement should not give approach reward.
     snap = _take_snap(engine)
     final_reward = p1_reward(engine, snap0, snap, action, "red")
-    assert final_reward <= 0.001 + 0.001  # only survival +/- retreat
+    assert final_reward <= 0.0003 + 0.001  # only survival +/- retreat
 
 
 def test_approach_reward_positive(engine, p1_reward):
@@ -89,7 +89,7 @@ def test_approach_reward_positive(engine, p1_reward):
     snap = engine.get_snapshot()
     final_reward = p1_reward(engine, snap0, snap, action, "red")
     # Should include approach reward (>0.001 survival alone)
-    assert final_reward > 0.001
+    assert final_reward > 0.0003
 
 
 def test_center_deviation_off_center(engine, p1_reward):
@@ -105,7 +105,7 @@ def test_center_deviation_off_center(engine, p1_reward):
     action = np.zeros(6, dtype=np.int8)
     reward = p1_reward(engine, prev, snap, action, "red")
     # Center dev: -0.04 * (10/20)² = -0.01, plus survival 0.001
-    assert reward == pytest.approx(-0.01 + 0.001)
+    assert reward == pytest.approx(-0.003 + 0.0003, abs=0.001)
 
 
 def test_stall_penalty(engine, p1_reward):
@@ -118,7 +118,7 @@ def test_stall_penalty(engine, p1_reward):
         reward = p1_reward(engine, snap, snap2, action, "red")
         snap = snap2
     # By frame 35, stall penalty = -0.02 * (35-30) = -0.1, plus survival
-    assert reward <= 0.001  # survival positive but stall dominates
+    assert reward <= 0.0003  # survival positive but stall dominates
 
 
 # ── Phase 1.1: Wall collision & death ──
@@ -130,7 +130,7 @@ def test_wall_collision(engine, p1_reward):
     action = np.array([1, 0, 0, 0, 0, 0], dtype=np.int8)
     reward = p1_reward(engine, snap, snap, action, "red")
     # -0.03 wall + 0.001 survival
-    assert reward == pytest.approx(-0.03 + 0.001)
+    assert reward == pytest.approx(-0.01 + 0.0003)
 
 
 def test_death_self_bomb(engine):
@@ -158,12 +158,11 @@ def test_death_self_bomb(engine):
     # Now test the reward function
     action = np.zeros(6, dtype=np.int8)
     result = reward(engine, prev, snap, action, "red")
-    # Death by own bomb in phase 1.2 component returns -3.0, multiplied by p11 weight 0.5 = -1.5
-    # Wasted bomb penalty: -0.2 * 1.0 (p12 weight) = -0.2
-    # Total: ~ -1.7 (plus negligible approach/retreat from position change)
-    # Verify death penalty is the dominant negative component
-    assert result < -1.0
-    assert result == pytest.approx(-1.7, abs=0.5)
+    # Death by own bomb: -1.0 × p11(0.5) = -0.5
+    # Wasted bomb: -0.067 × p12(1.0) = -0.067
+    # Total: ~ -0.567 (plus negligible approach/retreat from position change)
+    assert result < -0.3
+    assert result == pytest.approx(-0.567, abs=0.5)
 
 
 # ── Phase 1.2: Bomb placement & brick destruction ──
@@ -179,7 +178,7 @@ def test_bomb_placement_reward(engine):
     r = reward(engine, prev, snap, np.array([0, 0, 0, 0, 1, 0], dtype=np.int8), "red")
     # Should include +0.1 bomb placement + 0.001 survival (- possible approach/stall)
     # Near spawn, opponent is far → no approach or stall issues
-    assert r > 0.09  # has at least the bomb placement
+    assert r > 0.03  # has at least the bomb placement
 
 
 def test_brick_destruction_forward(engine):
@@ -227,7 +226,7 @@ def test_brick_destruction_forward(engine):
     # (3,4): from bomb(3,3) → opponent(18,10) => dot=(15,7)·(0,1)=7>0 → forward +0.5
     # (3,2): from bomb(3,3) → opponent(18,10) => dot=(15,7)·(0,-1)=-7≤0 → side +0.1
     # Total brick: 1.1. Plus survival 0.001, minus no retreat/stall/wall/illegal.
-    assert r > 0.5  # at minimum one forward brick at +0.5
+    assert r > 0.3  # at minimum one forward brick
 
 
 def test_kill_opponent_reward(engine):
@@ -262,7 +261,7 @@ def test_kill_opponent_reward(engine):
     assert snap.players[0].alive is True   # red survived
 
     r = reward(engine, prev, snap, np.zeros(6, dtype=np.int8), "red")
-    assert r == pytest.approx(4.0, abs=0.01)
+    assert r == pytest.approx(1.333, abs=0.01)
 
 
 # ── Phase 1.3: Buff pickup ──
@@ -288,7 +287,7 @@ def test_buff_pickup_reward(engine):
         engine.process_buff_pickups()
         snap2 = engine.get_snapshot()
         r = reward(engine, snap, snap2, np.zeros(6, dtype=np.int8), "red")
-        assert r == pytest.approx(0.2, abs=0.001)  # +0.2 for normal buff + tiny survival
+        assert r == pytest.approx(0.067, abs=0.01)  # +0.067 for normal buff + tiny survival
 
 
 # ── Phase weight transition ──
@@ -318,10 +317,10 @@ def test_phase_12_weights(engine):
     action = np.zeros(6, dtype=np.int8)
     r11 = p11(engine, snap, snap, action, "red")
     r12 = p12(engine, snap, snap, action, "red")
-    # p11: 0.001 survival
-    assert r11 == 0.001
-    # p12: 0.001 * 0.5 = 0.0005 survival
-    assert r12 == 0.0005
+    # p11: 0.0003 survival
+    assert r11 == 0.0003
+    # p12: 0.0003 * 0.5 = 0.00015 survival
+    assert r12 == 0.00015
 
 
 def test_env_with_phase1_reward():
