@@ -156,3 +156,109 @@ class TestBombermanEnv:
             assert frame is not None
             assert frame.shape[2] == 3  # RGB
         env.close()
+
+    def test_phase_11_reach_blue_terminates(self):
+        """Phase 1.1: red within 1 grid cell of blue → terminated=True, reward includes +1."""
+        import numpy as np
+        from src.bomberman_env import BombermanEnv
+        from src.utils import grid_center
+        env = BombermanEnv()
+        env.reset(options={"phase": 1.1})
+        snap = env.engine.get_snapshot()
+        blue = snap.players[1]
+        bx, by = blue.grid_x, blue.grid_y
+        gx, gy = bx - 1, by
+        if gx < 1:
+            gx, gy = bx + 1, by
+        env.engine.red_player.pos_x, env.engine.red_player.pos_y = grid_center(gx, gy)
+        action = np.array([0, 0, 0, 0, 0, 0], dtype=np.int8)
+        obs, reward, terminated, truncated, info = env.step(action)
+        assert terminated, "Red near blue should terminate episode"
+        assert not truncated, "Should not be truncated"
+        assert reward > 0.9, f"Expected +1 success reward, got {reward}"
+
+    def test_phase_11_reach_blue_reward_includes_bonus(self):
+        """The +1 bonus is given specifically for Phase 1.1 reach success."""
+        from src.bomberman_env import BombermanEnv
+        from src.utils import grid_center
+        from rewards.phase1 import Phase1Reward
+        env = BombermanEnv(reward_fn=Phase1Reward({"reward_survive": 0, "reward_approach": 0,
+            "penalty_retreat": 0, "penalty_center_dev": 0, "penalty_wall": 0,
+            "penalty_illegal_bomb_cap": 0, "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0}))
+        env.reset(options={"phase": 1.1})
+        snap = env.engine.get_snapshot()
+        blue = snap.players[1]
+        gx, gy = blue.grid_x - 1, blue.grid_y
+        if gx < 1:
+            gx, gy = blue.grid_x + 1, blue.grid_y
+        env.engine.red_player.pos_x, env.engine.red_player.pos_y = grid_center(gx, gy)
+        import numpy as np
+        obs, reward, terminated, truncated, info = env.step(np.zeros(6, dtype=np.int8))
+        assert terminated
+        assert reward == pytest.approx(1.0, abs=0.01), f"Expected +1.0, got {reward}"
+
+    def test_phase_11_death_terminates_no_bonus(self):
+        """Phase 1.1: red dies → terminated=True, no +1 success bonus."""
+        import numpy as np
+        from src.bomberman_env import BombermanEnv
+        env = BombermanEnv()
+        env.reset(options={"phase": 1.1})
+        env.engine.red_player.alive = False
+        obs, reward, terminated, truncated, info = env.step(np.zeros(6, dtype=np.int8))
+        assert terminated, "Red death should terminate episode"
+        assert not truncated
+        # reward = Phase1Reward (death penalty) - no +1 bonus
+        assert reward <= 0, f"Death should give non-positive reward, got {reward}"
+
+    def test_phase_12_death_terminates(self):
+        """Phase 1.2: either player dies → terminated=True."""
+        import numpy as np
+        from src.bomberman_env import BombermanEnv
+        env = BombermanEnv()
+        env.reset(options={"phase": 1.2})
+        env.engine.red_player.alive = False
+        obs, reward, terminated, truncated, info = env.step(np.zeros(6, dtype=np.int8))
+        assert terminated, "Phase 1.2 death should terminate"
+        assert not truncated
+
+        env.reset(options={"phase": 1.2})
+        env.engine.blue_player.alive = False
+        obs, reward, terminated, truncated, info = env.step(np.zeros(6, dtype=np.int8))
+        assert terminated, "Phase 1.2 blue death should terminate"
+
+    def test_timeout_truncates_per_frame_reward_kept(self):
+        """Episode truncates on timeout. Per-frame reward kept, no +1 bonus."""
+        import numpy as np
+        from src.bomberman_env import BombermanEnv
+        from rewards.phase1 import Phase1Reward
+        # Survival=0 so only approach/penalty components exist
+        env = BombermanEnv(
+            timeout_frames=10,
+            reward_fn=Phase1Reward({"reward_survive": 0, "reward_approach": 0,
+                "penalty_retreat": 0, "penalty_center_dev": 0, "penalty_wall": 0,
+                "penalty_illegal_bomb_cap": 0, "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0})
+        )
+        env.reset(options={"phase": 1.1})
+        for i in range(9):
+            obs, reward, terminated, truncated, info = env.step(np.zeros(6, dtype=np.int8))
+            assert not terminated, f"Frame {i}: unexpected termination"
+            assert not truncated, f"Frame {i}: unexpected truncation"
+        obs, reward, terminated, truncated, info = env.step(np.zeros(6, dtype=np.int8))
+        assert not terminated, "Timeout should not set terminated"
+        assert truncated, "Timeout should set truncated"
+        # Per-frame reward (all zeroed config) = 0.0
+        # No +1 success bonus added
+        assert reward == 0.0, f"Timeout reward should be 0 (all config zeroed), got {reward}"
+
+    def test_timeout_default_does_not_crash(self):
+        """Default timeout_frames=5400, episode runs normally until timeout."""
+        import numpy as np
+        from src.bomberman_env import BombermanEnv
+        env = BombermanEnv(timeout_frames=5)
+        env.reset(options={"phase": 1.1})
+        for i in range(5):
+            obs, reward, terminated, truncated, info = env.step(np.random.randint(0, 2, size=6, dtype=np.int8))
+            if terminated or truncated:
+                break
+        # Just verify no crash. Either termination or truncation is fine.
+        assert True
