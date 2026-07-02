@@ -26,3 +26,6 @@ docs/
 .idea/
 *.swp
 *.swo
+
+# Generated videos (not for distribution)
+videos/
