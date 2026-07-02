@@ -1,5 +1,6 @@
 """Tests for map_generator module."""
 import random
+import numpy as np
 import pytest
 from src.map_generator import connected_floor_cells, _safe_spots_for, generate_map
 from src.config import cfg
@@ -150,3 +151,76 @@ class TestPhase1ConnectedMap:
             grid = result["grid"]
             assert grid[1][2] == "floor", f"Red safe spot (1,2) is brick seed={seed}"
             assert grid[2][1] == "floor", f"Red safe spot (2,1) is brick seed={seed}"
+
+
+class TestEnvIntegration:
+    def test_reset_with_phase_options(self):
+        """Reset with phase=1.1 creates a valid environment."""
+        from src.bomberman_env import BombermanEnv
+        env = BombermanEnv()
+        obs, info = env.reset(options={"phase": 1.1})
+        assert obs.shape == (cfg.MAP_ROWS, cfg.MAP_COLS, 9)
+        assert obs.dtype == np.float32
+
+    def test_reset_phase_1_1_blue_reachable(self):
+        """After phase=1.1 reset, blue is reachable from red."""
+        from src.bomberman_env import BombermanEnv
+        from src.map_generator import connected_floor_cells
+        env = BombermanEnv()
+        for seed in range(5):
+            env.reset(seed=seed, options={"phase": 1.1})
+            snap = env.engine.get_snapshot()
+            red = snap.players[0]
+            blue = snap.players[1]
+            rx, ry = red.grid_x, red.grid_y
+            bx, by = blue.grid_x, blue.grid_y
+            grid = [[None for _ in range(cfg.MAP_ROWS + 1)]
+                    for _ in range(cfg.MAP_COLS + 1)]
+            for x in range(1, cfg.MAP_COLS + 1):
+                for y in range(1, cfg.MAP_ROWS + 1):
+                    val = env.engine.grid[x][y]
+                    if val == "stone":
+                        grid[x][y] = "stone"
+                    elif val == "brick":
+                        grid[x][y] = "brick"
+                    else:
+                        grid[x][y] = "floor"
+            reachable = connected_floor_cells(grid, rx, ry)
+            assert (bx, by) in reachable, \
+                f"seed={seed}: blue {bx,by} not reachable from red {rx,ry}"
+
+    def test_reset_no_options_fallback(self):
+        """Reset without phase uses default engine behavior (fixed blue spawn)."""
+        from src.bomberman_env import BombermanEnv
+        env = BombermanEnv()
+        obs, info = env.reset()
+        snap = env.engine.get_snapshot()
+        blue = snap.players[1]
+        assert blue.grid_x == cfg.MAP_COLS
+        assert blue.grid_y == cfg.MAP_ROWS
+
+    def test_reset_with_grid_options_still_works(self):
+        """Reset with options={'grid': ...} still works as before."""
+        from src.bomberman_env import BombermanEnv
+        env = BombermanEnv()
+        matrix = np.zeros((cfg.MAP_ROWS, cfg.MAP_COLS), dtype=np.int32)
+        matrix[0, 0] = 3
+        matrix[cfg.MAP_ROWS - 1, cfg.MAP_COLS - 1] = 4
+        obs, info = env.reset(options={"grid": matrix.tolist()})
+        snap = env.engine.get_snapshot()
+        assert snap.players[0].grid_x == 1
+        assert snap.players[0].grid_y == 1
+        assert snap.players[1].grid_x == cfg.MAP_COLS
+        assert snap.players[1].grid_y == cfg.MAP_ROWS
+
+    def test_reset_phase_1_2_blue_random_position(self):
+        """Phase 1.2: blue spawns at different positions across seeds."""
+        from src.bomberman_env import BombermanEnv
+        env = BombermanEnv()
+        positions = set()
+        for seed in range(5):
+            env.reset(seed=seed, options={"phase": 1.2})
+            snap = env.engine.get_snapshot()
+            blue = snap.players[1]
+            positions.add((blue.grid_x, blue.grid_y))
+        assert len(positions) > 1, "Blue should vary across seeds"

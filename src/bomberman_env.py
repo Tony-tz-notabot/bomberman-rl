@@ -1,4 +1,5 @@
 import math
+import random as _random_mod
 import numpy as np
 import pygame
 import gym
@@ -8,6 +9,7 @@ from typing import Callable, Optional, Tuple
 from src.config import cfg
 from src.constants import GameState, CELL_EMPTY, CELL_STONE, CELL_BRICK
 from src.game_engine import GameEngine
+from src.map_generator import generate_map
 from src.models import GameSnapshot
 from src.utils import grid_center, pixel_to_grid
 
@@ -171,6 +173,8 @@ class BombermanEnv(gym.Env):
         super().reset(seed=seed)
         if options is not None and "grid" in options:
             self._init_from_matrix(np.asarray(options["grid"]))
+        elif options is not None and "phase" in options:
+            self._init_phase(float(options["phase"]))
         else:
             self.engine.reset_match()
         snap = self.engine.get_snapshot()
@@ -222,6 +226,27 @@ class BombermanEnv(gym.Env):
             "action": bool(action[4]),
             "ignite": bool(action[5]),
         }
+
+    def _init_phase(self, phase: float):
+        """Initialize map and spawns using phase-aware map generator."""
+        seed_val = int(self.np_random.integers(0, 2**31))
+        rng = _random_mod.Random(seed_val)
+        result = generate_map(phase, rng)
+
+        self.engine.state = GameState.ROUND_RUNNING
+        self.engine.round_frame = 0
+        self.engine.bombs.clear()
+        self.engine.buffs.clear()
+        self.engine.explosion_cells.clear()
+
+        grid = result["grid"]
+        for x in range(1, cfg.MAP_COLS + 1):
+            for y in range(1, cfg.MAP_ROWS + 1):
+                self.engine.grid[x][y] = grid[x][y]
+
+        self.engine.red_player.reset(*result["red_spawn"])
+        self.engine.blue_player.reset(*result["blue_spawn"])
+        self.engine.safe_spots = result["safe_spots"]
 
     def _init_from_matrix(self, matrix: np.ndarray):
         """Initialize map from a (MAP_ROWS, MAP_COLS) matrix.
