@@ -138,7 +138,7 @@ def _generate_connected_map(rng: random.Random,
     """Phase 1.1 connected map — reduced brick probability, BFS-verified.
 
     Uses BRICK_GEN_PROB=0.3 and retries if the connected component of red
-    has fewer than 15 candidate floor cells for blue spawn. Falls back to
+    has fewer than 100 candidate floor cells for blue spawn. Falls back to
     a fully open map after 30 failed attempts.
     """
     brick_prob = 0.3
@@ -147,7 +147,7 @@ def _generate_connected_map(rng: random.Random,
         _populate_grid(grid, brick_prob, _safe_spots_for(red_spawn), rng)
         reachable = connected_floor_cells(grid, red_spawn[0], red_spawn[1])
         candidates = [(x, y) for (x, y) in reachable if (x, y) != red_spawn]
-        if len(candidates) >= 14:
+        if len(candidates) >= 100:
             blue_spawn = rng.choice(candidates)
             safe = _safe_spots_for(red_spawn, blue_spawn)
             for (sx, sy) in safe:
