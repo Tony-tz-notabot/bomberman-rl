@@ -25,7 +25,7 @@ def generate_map(phase: float, rng: random.Random,
             blue_spawn: (int, int)
             safe_spots: set of (int, int)
     """
-    if phase == 1.1:
+    if int(phase * 10) == 11:  # Phase 1.1
         return _generate_connected_map(rng, red_spawn)
     return _generate_standard_map(rng, red_spawn)
 
@@ -100,7 +100,7 @@ def _sample_blue_spawn(grid: list, red_spawn: tuple,
     Phase 1.2/1.3: any floor cell (no connectivity check).
     """
     rx, ry = red_spawn
-    if phase == 1.1:
+    if int(phase * 10) == 11:  # Phase 1.1
         component = connected_floor_cells(grid, rx, ry)
         candidates = [(x, y) for (x, y) in component if (x, y) != (rx, ry)]
     else:

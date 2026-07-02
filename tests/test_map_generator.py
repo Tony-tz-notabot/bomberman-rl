@@ -6,17 +6,15 @@ from src.config import cfg
 
 
 class TestConnectedFloorCells:
-    def test_empty_map_all_connected(self):
-        """All floor map: every reachable cell in component."""
+    def test_connected_map_high_connectivity(self):
         rng = random.Random(0)
-        result = generate_map(1.1, rng)  # 1.1 connected map
+        result = generate_map(1.1, rng)
         grid = result["grid"]
         reachable = connected_floor_cells(grid, 1, 1)
-        # All non-stone floor cells should be reachable at low brick prob
         floor_count = sum(1 for x in range(1, cfg.MAP_COLS + 1)
                           for y in range(1, cfg.MAP_ROWS + 1)
                           if grid[x][y] == "floor")
-        assert len(reachable) >= floor_count * 0.8  # at least 80% connected
+        assert len(reachable) >= floor_count * 0.9
 
     def test_brick_wall_disconnects(self):
         """Brick wall fully blocking a corridor: far side is disconnected."""
@@ -31,7 +29,7 @@ class TestConnectedFloorCells:
                 else:
                     grid[x][y] = "floor"
         # Red at (1,1): connected cells are (1,1), (1,3), (1,5), ..., (3,1), (5,1) ...
-        # Actually this needs more careful construction. Let's just block y=2 corridor row.
+        # Keep red's adjacent corridors open, then block the entire y=2 row
         grid[1][2] = "floor"  # keep red's neighbor open
         grid[2][1] = "floor"  # keep red's other neighbor open
         reachable = connected_floor_cells(grid, 1, 1)
@@ -104,15 +102,23 @@ class TestStandardMap:
             assert result["grid"][bx][by] == "floor", f"Blue not on floor seed={seed}"
 
     def test_standard_map_no_guaranteed_connectivity(self):
-        """Phase 1.2 maps may have blue in a disconnected region.
-
-        With BRICK_GEN_PROB=0.7, it's statistically likely some blue spawns
-        are disconnected. We just verify the blue spawn doesn't crash.
-        """
         rng = random.Random(456)
         result = generate_map(1.2, rng)
-        # Should produce valid output regardless of connectivity
         assert result["blue_spawn"] is not None
+        bx, by = result["blue_spawn"]
+        assert result["grid"][bx][by] == "floor"
+
+    def test_sample_blue_spawn_fallback(self):
+        """Fallback: when no floor candidates exist, picks non-stone cell."""
+        from src.map_generator import _sample_blue_spawn
+        rng = random.Random(1)
+        grid = [["stone" for _ in range(cfg.MAP_ROWS + 1)] for _ in range(cfg.MAP_COLS + 1)]
+        grid[1][1] = "floor"  # red spawn only
+        grid[2][1] = "brick"  # one non-stone cell for fallback
+        result = _sample_blue_spawn(grid, (1, 1), 1.2, rng)
+        assert result is not None
+        bx, by = result
+        assert grid[bx][by] != "stone"
 
 
 class TestPhase1ConnectedMap:
