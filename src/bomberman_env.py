@@ -244,15 +244,17 @@ class BombermanEnv(gym.Env):
         # Timeout truncation - suppress termination rewards/penalties
         truncated = self._episode_frame >= self.timeout_frames
         if truncated and terminated:
-            # Death AND timeout on same frame (rare). Terminated takes priority.
+            # Death/success AND timeout on same frame (extremely rare).
+            # Terminated takes priority: death penalty is legitimate as
+            # the episode IS a death-termination, not a time-limited one.
             pass
         elif truncated:
-            # Pure timeout: keep per-frame reward, no termination rewards/penalties
-            # Success bonus not added (dead/alive check follows)
+            # Pure timeout: keep per-frame reward, no termination bonuses.
             pass
 
         # Add Phase 1.1 success reward only on successful reach termination
-        if phase_11_success and not (red_dead or blue_dead):
+        # (not on timeout, not on death)
+        if phase_11_success and not (red_dead or blue_dead) and not truncated:
             # Red reached blue alive and well -> +1 success bonus
             reward += 1.0
 
