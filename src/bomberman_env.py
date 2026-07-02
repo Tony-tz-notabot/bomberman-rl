@@ -238,6 +238,10 @@ class BombermanEnv(gym.Env):
         self.engine.bombs.clear()
         self.engine.buffs.clear()
         self.engine.explosion_cells.clear()
+        self.engine.refresh_timer = cfg.REFRESH_INTERVAL
+        self.engine.round_delay_timer = 0
+        self.engine.current_winner = ""
+        self.engine.next_bomb_id = 0
 
         grid = result["grid"]
         for x in range(1, cfg.MAP_COLS + 1):
