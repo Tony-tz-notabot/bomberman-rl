@@ -1,0 +1,16 @@
+# Core game + RL dependencies (install in order)
+pygame>=2.0
+numpy
+gymnasium
+stable-baselines3>=2.5
+sb3-contrib
+torch>=2.0
+tensorboard
+pyyaml>=5.0
+
+# Optional: video recording
+imageio
+imageio-ffmpeg
+
+# Optional: testing
+pytest
