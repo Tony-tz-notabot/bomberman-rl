@@ -51,12 +51,16 @@ class Phase1Reward(RewardFunction):
         curr_self = snap.players[0] if snap.players[0].id == agent_id else snap.players[1]
         opp = snap.players[1] if curr_self is snap.players[0] else snap.players[0]
         prev_self = prev_snap.players[0] if prev_snap.players[0].id == agent_id else prev_snap.players[1]
+        # Integer grid for stall heatmap, continuous grid for approach/retreat
         gx, gy = pixel_to_grid(curr_self.pos_x, curr_self.pos_y)
-        opp_gx, opp_gy = opp.grid_x, opp.grid_y
-        curr_mdist = abs(gx - opp_gx) + abs(gy - opp_gy)
+        fx = (curr_self.pos_x - cfg.CELL_SIZE / 2) / cfg.CELL_SIZE + 1
+        fy = (curr_self.pos_y - cfg.UI_BAR_HEIGHT - cfg.CELL_SIZE / 2) / cfg.CELL_SIZE + 1
+        opp_fx = (opp.pos_x - cfg.CELL_SIZE / 2) / cfg.CELL_SIZE + 1
+        opp_fy = (opp.pos_y - cfg.UI_BAR_HEIGHT - cfg.CELL_SIZE / 2) / cfg.CELL_SIZE + 1
+        fdist = abs(fx - opp_fx) + abs(fy - opp_fy)
         reward = 0.0
         reward += w["p11"] * self._survival(curr_self.alive)
-        reward += w["p11"] * self._approach_and_retreat(gx, gy, opp_gx, opp_gy, curr_mdist)
+        reward += w["p11"] * self._approach_and_retreat(fx, fy, opp_fx, opp_fy, fdist)
         reward += w["p11"] * self._center_deviation(curr_self)
         reward += w["p11"] * self._stall(gx, gy)
         reward += w["p11"] * self._wall_collision(action[:4], prev_self, curr_self)
@@ -69,7 +73,7 @@ class Phase1Reward(RewardFunction):
             reward += w["p12"] * self._kill_opponent(prev_snap, snap, agent_id)
         if w["p13"] > 0:
             reward += w["p13"] * self._buff_pickup(prev_snap, snap, agent_id)
-        self._prev_mdist = curr_mdist
+        self._prev_mdist = fdist
         return reward
 
     # ── Phase 1.1: Basic survival & movement ──
@@ -82,22 +86,23 @@ class Phase1Reward(RewardFunction):
             return -self.cfg.get("penalty_survive_time", 0.002)
         return self.cfg.get("reward_survive", 0.0)
 
-    def _approach_and_retreat(self, gx, gy, opp_gx, opp_gy, curr_mdist) -> float:
+    def _approach_and_retreat(self, fx, fy, opp_fx, opp_fy, fdist) -> float:
+        """Continuous Manhattan distance (fractional grid units) for approach/retreat."""
         reward = 0.0
         window = self.cfg["reward_approach_window"]
-        self._pos_buffer.append((gx, gy))
+        self._pos_buffer.append((fx, fy))
         if len(self._pos_buffer) > window:
             self._pos_buffer.pop(0)
-        # Per-frame retreat penalty
-        if self._prev_mdist is not None and curr_mdist > self._prev_mdist:
-            reward -= self.cfg["penalty_retreat"] * (curr_mdist - self._prev_mdist)
+        # Per-frame retreat penalty (continuous distance)
+        if self._prev_mdist is not None and fdist > self._prev_mdist:
+            reward -= self.cfg["penalty_retreat"] * (fdist - self._prev_mdist)
         # Windowed approach reward (every `window` frames)
         if len(self._pos_buffer) == window:
             avg_x = sum(p[0] for p in self._pos_buffer) / window
             avg_y = sum(p[1] for p in self._pos_buffer) / window
             if self._prev_avg_x is not None:
-                prev_avg_dist = abs(self._prev_avg_x - opp_gx) + abs(self._prev_avg_y - opp_gy)
-                curr_avg_dist = abs(avg_x - opp_gx) + abs(avg_y - opp_gy)
+                prev_avg_dist = abs(self._prev_avg_x - opp_fx) + abs(self._prev_avg_y - opp_fy)
+                curr_avg_dist = abs(avg_x - opp_fx) + abs(avg_y - opp_fy)
                 if curr_avg_dist < prev_avg_dist:
                     reward += self.cfg["reward_approach"] * (prev_avg_dist - curr_avg_dist)
             self._prev_avg_x, self._prev_avg_y = avg_x, avg_y
