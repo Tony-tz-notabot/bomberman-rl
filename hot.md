@@ -198,3 +198,9 @@
 - [x] **Phase 3: Pipeline 集成 VecEnv** — `_setup_phase_env()` 改用 `_build_vec_env()`；`_create_phase_model()` 自动调整 `n_steps // n_envs`；`_evaluate()` 改用独立的单 eval env（不依赖训练 VecEnv）；phase 推进正确重建 VecEnv；5 个测试
 - [x] **Phase 4: 边界 & 端到端** — n_envs=1 向后兼容验证；n_envs=2 完整训练 + 评估 + 检查点通过；n_envs=32 不崩溃；config hash 稳定；4 个测试
 - [x] **全量测试: 202 passed** — 原有 185 测试 + 17 个新测试全部通过，零回归
+### 2026-07-03 (later)
+- [x] **配置文件调优 (commit cd97df1)** — `configs/phase1_fast.yaml` 调整适配 T4x2：n_envs 8→10, n_steps 2048→8192, composite_threshold 0.5→0.8。已 push 到 GitHub。
+- [x] **gym → gymnasium 迁移** — 修复 SB3 2.9.0 + NumPy 2.4.4 兼容性。修改 5 个文件 (`src/bomberman_env.py`, `src/pettingzoo_env.py`, `src/feature_extractor.py`, `tests/test_feature_extractor.py`, `examples/random_agent_video.py`) 将 `import gym` / `from gym import spaces` 全部改为 `from gymnasium import spaces`。SB3 `check_env` 通过，202 测试全绿。
+- [x] **docs/kaggle_training.ipynb** — 编写 Kaggle 云端训练 Notebook，包含依赖安装、项目代码拷贝、配置调优、自动续训检测、产出打包下载完整流程
+- [x] **评估指标修复 (commit c18c853)** — `normalized_approach` 和 `low_final_distance` 改用每局实际初始距离做分母（替代硬编码的 30 格），因为 Phase 1.1 蓝方随机出生，初始距离并非固定 30。
+- [x] **Phase 1.1 炸弹禁用修复 (commit 266d28b)** — 防止 agent 自爆 exploit（开局放弹自杀结束 episode 以避免后续惩罚累加）。在 `BombermanEnv.step()` 中 Phase 1.1 时将 `action[4]`(放弹) 和 `action[5]`(引爆) 强制置 0。Phase 1.2/1.3 不受影响。
