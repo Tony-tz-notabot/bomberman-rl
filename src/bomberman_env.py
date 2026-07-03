@@ -2,8 +2,8 @@ import math
 import random as _random_mod
 import numpy as np
 import pygame
-import gym
-from gym import spaces
+import gymnasium as gym
+from gymnasium import spaces
 from typing import Callable, Optional, Tuple
 
 from src.config import cfg
@@ -194,6 +194,12 @@ class BombermanEnv(gym.Env):
 
         action: MultiBinary(6) - [up, down, left, right, action, ignite]
         """
+        # Phase 1.1: disable bomb placement to prevent self-destruct exploit
+        if int(self._phase * 10) == 11:
+            action = action.copy()
+            action[4] = 0  # no bomb placement
+            action[5] = 0  # no ignite
+
         # Convert action to dict
         red_dict = self._action_to_dict(action)
 
