@@ -8,7 +8,7 @@ run:
 ppo:
   learning_rate: 3.0e-4
   n_steps: 8192
-  batch_size: 64
+  batch_size: 256
   n_epochs: 10
   gamma: 0.99
   gae_lambda: 0.95
@@ -34,7 +34,7 @@ phases:
 evaluation:
   interval: 25000
   episodes: 10
-  video_episodes: 3
+  video_episodes: 2
   deterministic: true
 
 composite_score:
