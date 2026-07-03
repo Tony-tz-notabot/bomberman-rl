@@ -10,13 +10,11 @@ from rewards import RewardFunction
 
 class Phase1Reward(RewardFunction):
     _DEFAULT_CFG = {
-        "reward_approach": 0.231, "reward_approach_window": 10,
-        "penalty_retreat": 0.021,
+        "reward_approach": 2.0, "penalty_retreat": 0.02,
         "penalty_center_dev": 0.013,
         "penalty_stall_threshold": 30, "penalty_stall_init": 0.007, "penalty_stall_cap": 0.00167,
         "penalty_wall": 0.003,
-        "reward_survive": 0.0,  # was 0.0003
-        "penalty_survive_time": 0.002,  # Phase 1.1 only: per-frame drain to create urgency
+        "reward_survive": 0.0,
         "penalty_illegal_bomb_cap": 0.033,
         "penalty_illegal_ignite": 0.017, "penalty_illegal_dir": 0.017,
         "penalty_death_self": 0.333, "penalty_death_opp": 0.167,
@@ -40,9 +38,7 @@ class Phase1Reward(RewardFunction):
         self.reset()
     def reset(self, episode_info=None):
         self._frame = 0
-        self._pos_buffer = []
-        self._prev_avg_x = self._prev_avg_y = None
-        self._prev_mdist = None
+        self._prev_fdist = None
         self._stall_frames = 0
         self._pos_trace = deque(maxlen=40)
     def __call__(self, engine, prev_snap, snap, action, agent_id):
@@ -60,7 +56,7 @@ class Phase1Reward(RewardFunction):
         fdist = abs(fx - opp_fx) + abs(fy - opp_fy)
         reward = 0.0
         reward += w["p11"] * self._survival(curr_self.alive)
-        reward += w["p11"] * self._approach_and_retreat(fx, fy, opp_fx, opp_fy, fdist)
+        reward += w["p11"] * self._distance_gradient(fdist)
         reward += w["p11"] * self._center_deviation(curr_self)
         reward += w["p11"] * self._stall(gx, gy)
         reward += w["p11"] * self._wall_collision(action[:4], prev_self, curr_self)
@@ -73,7 +69,7 @@ class Phase1Reward(RewardFunction):
             reward += w["p12"] * self._kill_opponent(prev_snap, snap, agent_id)
         if w["p13"] > 0:
             reward += w["p13"] * self._buff_pickup(prev_snap, snap, agent_id)
-        self._prev_mdist = fdist
+        self._prev_fdist = fdist
         return reward
 
     # ── Phase 1.1: Basic survival & movement ──
@@ -81,32 +77,22 @@ class Phase1Reward(RewardFunction):
     def _survival(self, alive: bool) -> float:
         if not alive:
             return 0.0
-        # Phase 1.1: no bombs, can't die — per-frame penalty creates urgency to reach blue
-        if int(self.cfg.get("phase", 1.1) * 10) == 11:
-            return -self.cfg.get("penalty_survive_time", 0.002)
         return self.cfg.get("reward_survive", 0.0)
 
-    def _approach_and_retreat(self, fx, fy, opp_fx, opp_fy, fdist) -> float:
-        """Continuous Manhattan distance (fractional grid units) for approach/retreat."""
-        reward = 0.0
-        window = self.cfg["reward_approach_window"]
-        self._pos_buffer.append((fx, fy))
-        if len(self._pos_buffer) > window:
-            self._pos_buffer.pop(0)
-        # Per-frame retreat penalty (continuous distance)
-        if self._prev_mdist is not None and fdist > self._prev_mdist:
-            reward -= self.cfg["penalty_retreat"] * (fdist - self._prev_mdist)
-        # Windowed approach reward (every `window` frames)
-        if len(self._pos_buffer) == window:
-            avg_x = sum(p[0] for p in self._pos_buffer) / window
-            avg_y = sum(p[1] for p in self._pos_buffer) / window
-            if self._prev_avg_x is not None:
-                prev_avg_dist = abs(self._prev_avg_x - opp_fx) + abs(self._prev_avg_y - opp_fy)
-                curr_avg_dist = abs(avg_x - opp_fx) + abs(avg_y - opp_fy)
-                if curr_avg_dist < prev_avg_dist:
-                    reward += self.cfg["reward_approach"] * (prev_avg_dist - curr_avg_dist)
-            self._prev_avg_x, self._prev_avg_y = avg_x, avg_y
-        return reward
+    def _distance_gradient(self, fdist) -> float:
+        """Per-frame distance gradient reward.
+
+        Moving closer to opponent -> positive reward proportional to distance change.
+        Moving away -> negative penalty proportional to distance change.
+        No window, no buffer — fires every frame based on frame-to-frame delta.
+        """
+        if self._prev_fdist is not None:
+            diff = self._prev_fdist - fdist  # positive = closer
+            if diff > 0:
+                return self.cfg["reward_approach"] * diff
+            else:
+                return self.cfg["penalty_retreat"] * diff  # negative (diff < 0)
+        return 0.0
 
     def _center_deviation(self, player) -> float:
         gx, gy = player.grid_x, player.grid_y

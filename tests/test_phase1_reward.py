@@ -27,11 +27,11 @@ def _take_snap(engine):
 # ── Phase 1.1: Survival & illegal action ──
 
 def test_survival_alive(engine, p1_reward):
-    """Alive in Phase 1.1 gets per-frame survival penalty."""
+    """Alive in Phase 1.1 gets zero survival reward."""
     snap = _take_snap(engine)
     action = np.zeros(6, dtype=np.int8)
     reward = p1_reward(engine, snap, snap, action, "red")
-    assert reward == pytest.approx(-0.002)
+    assert reward == pytest.approx(0.0, abs=0.001)
 
 
 def test_illegal_bomb_cap(engine, p1_reward):
@@ -39,57 +39,73 @@ def test_illegal_bomb_cap(engine, p1_reward):
     snap = _take_snap(engine)
     action = np.array([0, 0, 0, 0, 1, 0], dtype=np.int8)  # action=1
     reward = p1_reward(engine, snap, snap, action, "red")
-    # -illegal_bomb_cap + survival_penalty
-    assert reward == pytest.approx(-0.035)
+    # -illegal_bomb_cap, no survival penalty
+    assert reward == pytest.approx(-0.033)
 
 
 # ── Phase 1.1: Approach/retreat, center deviation, stall ──
 
 def test_approach_window(engine, p1_reward):
-    """After window frames of approach toward opponent, reward fires."""
-    # Place player far from opponent
-    engine.red_player.pos_x, engine.red_player.pos_y = cfg.UI_BAR_HEIGHT + 20, 20
-    engine.blue_player.pos_x, engine.blue_player.pos_y = 700, cfg.UI_BAR_HEIGHT + 200
-    # Ensure opponent is stationary
-    snap0 = _take_snap(engine)
+    """Moving toward opponent gives gradient distance reward each frame."""
+    cfg_copy = dict(p1_reward.cfg)
+    p1_reward.cfg["reward_approach"] = 2.0
+    engine.red_player.pos_x, engine.red_player.pos_y = 100, cfg.UI_BAR_HEIGHT + 100
+    engine.blue_player.pos_x, engine.blue_player.pos_y = 700, cfg.UI_BAR_HEIGHT + 100
     action = np.zeros(6, dtype=np.int8)
-    # Run window frames with approach
-    for i in range(p1_reward.cfg["reward_approach_window"] + 1):
-        px = engine.red_player.pos_x + 2  # move right each frame
-        engine.red_player.pos_x = min(px, 700)
-        snap = _take_snap(engine)
-        p1_reward(engine, snap0, snap, action, "red")
-        snap0 = snap
-    # After window fills, the last call had approach
-    # _prev_avg_x is now set. Next step without movement should not give approach reward.
+    # Warm-up: first call initializes _prev_fdist, returns 0
+    snap0 = _take_snap(engine)
+    p1_reward(engine, snap0, snap0, action, "red")
+    # Move toward opponent 1px
+    engine.red_player.pos_x += 1
     snap = _take_snap(engine)
-    final_reward = p1_reward(engine, snap0, snap, action, "red")
-    assert final_reward <= 0.001  # only survival (now 0) +/- retreat
+    reward = p1_reward(engine, snap0, snap, action, "red")
+    # Distance decreased slightly -> small positive reward
+    assert 0.0 < reward < 0.5, f"Expected positive gradient reward, got {reward}"
+    p1_reward.cfg["reward_approach"] = cfg_copy.get("reward_approach", 2.0)
+
+
+def test_approach_retreat_penalty(engine, p1_reward):
+    """Moving away from opponent gives retreat penalty."""
+    cfg_copy = dict(p1_reward.cfg)
+    p1_reward.cfg["penalty_retreat"] = 0.5
+    engine.red_player.pos_x, engine.red_player.pos_y = 100, cfg.UI_BAR_HEIGHT + 100
+    engine.blue_player.pos_x, engine.blue_player.pos_y = 500, cfg.UI_BAR_HEIGHT + 100
+    action = np.zeros(6, dtype=np.int8)
+    # Warm-up: first call initializes _prev_fdist
+    snap0 = _take_snap(engine)
+    p1_reward(engine, snap0, snap0, action, "red")
+    # Move away from opponent (left, further from 500)
+    engine.red_player.pos_x -= 1
+    snap = _take_snap(engine)
+    reward = p1_reward(engine, snap0, snap, action, "red")
+    # Distance increased -> negative reward
+    assert reward < 0, f"Expected negative retreat penalty, got {reward}"
+    p1_reward.cfg["penalty_retreat"] = cfg_copy.get("penalty_retreat", 0.5)
 
 
 def test_approach_reward_positive(engine, p1_reward):
-    """When window average moves toward opponent, approach reward fires."""
+    """Moving toward opponent over multiple frames accumulates approach reward."""
+    cfg_copy = dict(p1_reward.cfg)
+    p1_reward.cfg["reward_approach"] = 2.0
+    p1_reward.cfg["penalty_retreat"] = 0.0
     # Place player far from opponent
     engine.red_player.pos_x, engine.red_player.pos_y = 100, cfg.UI_BAR_HEIGHT + 100
     engine.blue_player.pos_x, engine.blue_player.pos_y = 700, cfg.UI_BAR_HEIGHT + 100
     snap0 = engine.get_snapshot()
     action = np.zeros(6, dtype=np.int8)
 
-    # Move toward opponent across cells (40px per cell, move 50px to cross 1+ cells)
-    for i in range(p1_reward.cfg["reward_approach_window"]):
-        engine.red_player.pos_x += 5  # 5px/frame for 10 frames = 50px (>1 cell)
+    total = 0.0
+    for i in range(10):
+        engine.red_player.pos_x += 5  # 5px/frame toward opponent
         snap = engine.get_snapshot()
-        _ = p1_reward(engine, snap0, snap, action, "red")
+        r = p1_reward(engine, snap0, snap, action, "red")
+        total += r
         snap0 = snap
 
-    # After window fills, the last call should have had approach reward
-    # Survival alone = 0.0. Approach reward adds on top.
-    # Move one more frame and capture the reward
-    engine.red_player.pos_x += 5
-    snap = engine.get_snapshot()
-    final_reward = p1_reward(engine, snap0, snap, action, "red")
-    # Should include approach reward (>0.0 survival alone)
-    assert final_reward > 0.0
+    # Each 5px move toward opponent gives positive reward
+    assert total > 0.01, f"Expected positive total, got {total}"
+    p1_reward.cfg["reward_approach"] = cfg_copy.get("reward_approach", 2.0)
+    p1_reward.cfg["penalty_retreat"] = cfg_copy.get("penalty_retreat", 0.0)
 
 
 def test_center_deviation_off_center(engine, p1_reward):
@@ -104,8 +120,8 @@ def test_center_deviation_off_center(engine, p1_reward):
     snap = _take_snap(engine)
     action = np.zeros(6, dtype=np.int8)
     reward = p1_reward(engine, prev, snap, action, "red")
-    # Center dev: -0.013 * (10/20)² = -0.00325, plus survival -0.002
-    assert reward == pytest.approx(-0.005, abs=0.001)
+    # Center dev: -0.013 * (10/20)² = -0.00325, plus survival 0.0
+    assert reward == pytest.approx(-0.003, abs=0.001)
 
 
 def test_stall_penalty(engine, p1_reward):
@@ -118,8 +134,8 @@ def test_stall_penalty(engine, p1_reward):
         reward = p1_reward(engine, snap, snap2, action, "red")
         snap = snap2
     # By frame 75: buffer full (40) + stall_frames=36 > 30 → cap hit at -0.00167
-    # Survival -0.002 + stall -0.00167 + possible center_dev
-    assert reward < -0.003, f"Expected stall penalty, got {reward}"
+    # Survival 0 + stall -0.00167 + possible center_dev
+    assert reward < -0.001, f"Expected stall penalty, got {reward}"
 
 
 # ── Phase 1.1: Wall collision & death ──
@@ -130,8 +146,8 @@ def test_wall_collision(engine, p1_reward):
     # Move up (action[0]=1)
     action = np.array([1, 0, 0, 0, 0, 0], dtype=np.int8)
     reward = p1_reward(engine, snap, snap, action, "red")
-    # -0.003 wall + -0.002 survival
-    assert reward == pytest.approx(-0.005)
+    # -0.003 wall + 0.0 survival
+    assert reward == pytest.approx(-0.003)
 
 
 def test_death_self_bomb(engine):
