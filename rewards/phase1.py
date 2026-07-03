@@ -13,7 +13,7 @@ class Phase1Reward(RewardFunction):
         "reward_approach": 0.033, "reward_approach_window": 10,
         "penalty_retreat": 0.007,
         "penalty_center_dev": 0.013,
-        "penalty_stall_threshold": 30, "penalty_stall_init": 0.007, "penalty_stall_cap": 0.167,
+        "penalty_stall_threshold": 30, "penalty_stall_init": 0.007, "penalty_stall_cap": 0.00167,
         "penalty_wall": 0.01,
         "reward_survive": 0.0,  # was 0.0003
         "penalty_survive_time": 0.002,  # Phase 1.1 only: per-frame drain to create urgency

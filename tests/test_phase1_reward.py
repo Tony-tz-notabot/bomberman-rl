@@ -117,9 +117,9 @@ def test_stall_penalty(engine, p1_reward):
         snap2 = _take_snap(engine)
         reward = p1_reward(engine, snap, snap2, action, "red")
         snap = snap2
-    # By frame 75: buffer full (40) + stall_frames=36 > 30 → ramp-up active
-    # Survival -0.002 + stall -0.042 + possible center_dev
-    assert reward < -0.03, f"Expected stall penalty, got {reward}"
+    # By frame 75: buffer full (40) + stall_frames=36 > 30 → cap hit at -0.00167
+    # Survival -0.002 + stall -0.00167 + possible center_dev
+    assert reward < -0.003, f"Expected stall penalty, got {reward}"
 
 
 # ── Phase 1.1: Wall collision & death ──
