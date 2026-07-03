@@ -18,6 +18,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 import torch
 from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import BaseCallback
 
 # Ensure the project root is on sys.path so that `import src`, `import rewards` work
 # when running the script directly (e.g. `python scripts/train_phase1.py`).
@@ -33,6 +34,45 @@ from src.video_recorder import VideoRecorder
 from rewards.phase1 import Phase1Reward
 
 logger = logging.getLogger("train_phase1")
+
+
+class LossRecorderCallback(BaseCallback):
+    """Captures PPO loss values after each policy update and saves to JSONL.
+
+    In SB3, the logger records training metrics (train/loss, train/policy_loss, etc.)
+    inside train() and dumps them at the end. The first _on_step() of the next
+    rollout sees these values still in the logger's name_to_value dict.
+    """
+
+    def __init__(self, save_path: str):
+        super().__init__(verbose=0)
+        self.save_path = save_path
+        self._recorded_steps = set()
+
+    def _on_step(self) -> bool:
+        try:
+            nv = self.logger.name_to_value
+            if "train/loss" in nv:
+                step = self.num_timesteps
+                if step not in self._recorded_steps:
+                    self._recorded_steps.add(step)
+                    record = {
+                        "step": int(step),
+                        "loss": float(nv.get("train/loss")) if nv.get("train/loss") is not None else None,
+                        "policy_loss": float(nv.get("train/policy_gradient_loss")) if nv.get("train/policy_gradient_loss") is not None else None,
+                        "value_loss": float(nv.get("train/value_loss")) if nv.get("train/value_loss") is not None else None,
+                        "entropy": float(nv.get("train/entropy_loss")) if nv.get("train/entropy_loss") is not None else None,
+                        "approx_kl": float(nv.get("train/approx_kl")) if nv.get("train/approx_kl") is not None else None,
+                        "clip_fraction": float(nv.get("train/clip_fraction")) if nv.get("train/clip_fraction") is not None else None,
+                        "explained_variance": float(nv.get("train/explained_variance")) if nv.get("train/explained_variance") is not None else None,
+                        "learning_rate": float(nv.get("train/learning_rate")) if nv.get("train/learning_rate") is not None else None,
+                        "n_updates": int(nv.get("train/n_updates")) if nv.get("train/n_updates") is not None else None,
+                    }
+                    with open(self.save_path, "a") as f:
+                        f.write(json.dumps(record) + "\n")
+        except (KeyError, AttributeError):
+            pass
+        return True
 
 
 def _stationary_opponent(snapshot, agent_id):
@@ -198,6 +238,9 @@ class TrainingPipeline:
         self.model = None
         self.env = None
 
+        # Loss recorder (set up after _create_phase_model)
+        self.loss_callback = None
+
         # If resuming, overwrite state from checkpoint
         if resume_dir:
             self._load_from_resume(resume_dir)
@@ -294,6 +337,9 @@ class TrainingPipeline:
         ppo_cfg = dict(self.config["ppo"])
         ppo_cfg["n_steps"] = per_env_steps
         self.model = _create_model(self.env, {**self.config, "ppo": ppo_cfg}, device)
+        # Set up loss recorder
+        loss_path = str(self.run_dir / "logs" / f"losses_phase{int(self.current_phase * 10)}.jsonl")
+        self.loss_callback = LossRecorderCallback(loss_path)
         # Set tensorboard log dir only if tensorboard is available
         # (gracefully degrades for CI / minimal installs)
         tb_log = str(self.run_dir / "logs" / f"phase_{int(self.current_phase * 10)}")
@@ -355,12 +401,17 @@ class TrainingPipeline:
             self.current_phase, self.config, self.config["run"]["seed"]
         )
 
+        # Path for raw network output traces
+        net_output_path = str(self.run_dir / "evaluations" / phase_key
+                              / f"step_{self.total_timesteps:07d}_net_output.jsonl")
+
         try:
             metrics = evaluate_phase(
                 self.model, eval_env, self.config,
                 phase=self.current_phase,
                 num_episodes=num_episodes,
                 seeds=seeds,
+                net_output_path=net_output_path,
             )
         finally:
             eval_env.close()
@@ -535,7 +586,8 @@ class TrainingPipeline:
                 # Train in chunks for responsiveness
                 chunk = min(eval_interval, remaining)
                 self.model.learn(total_timesteps=chunk, reset_num_timesteps=False,
-                                 tb_log_name=f"phase_{int(self.current_phase * 10)}")
+                                 tb_log_name=f"phase_{int(self.current_phase * 10)}",
+                                 callback=self.loss_callback)
                 self.total_timesteps += chunk
                 self.phase_timesteps += chunk
 

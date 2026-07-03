@@ -4,10 +4,13 @@ Provides fixed-seed evaluation episodes, metric collection,
 composite score computation, and formatted logging output.
 """
 import copy
+import json
 import random as _random_mod
 import time
+from pathlib import Path
 from typing import Dict, List, Optional, Any
 import numpy as np
+import torch
 from src.config import cfg
 
 
@@ -18,6 +21,7 @@ def evaluate_phase(
     phase: float,
     num_episodes: int = 10,
     seeds: Optional[List[int]] = None,
+    net_output_path: Optional[str] = None,
 ) -> Dict[str, float]:
     """Run fixed-seed evaluation episodes and return aggregate metrics.
 
@@ -28,6 +32,7 @@ def evaluate_phase(
         phase: Current phase (1.1, 1.2, or 1.3).
         num_episodes: Number of evaluation episodes.
         seeds: Optional list of seeds (one per episode). If None, uses 0..num_episodes-1.
+        net_output_path: Optional path to save raw network outputs (JSONL, logged every 24 frames).
 
     Returns:
         Dict of metric name -> scalar value.
@@ -55,6 +60,9 @@ def evaluate_phase(
     all_kill_counts: List[int] = []
     all_lengths: List[int] = []
 
+    # Raw network output traces (logged every 24 frames)
+    net_output_trace: List[Dict] = []
+
     for ep_idx in range(num_episodes):
         seed = seeds[ep_idx]
         obs, _ = env.reset(options={"phase": phase}, seed=seed)
@@ -74,6 +82,12 @@ def evaluate_phase(
 
         while not done:
             action, _ = model.predict(obs, deterministic=True)
+
+            # Record raw network output every 24 frames
+            if net_output_path and ep_length % 24 == 0:
+                net_record = _record_net_output(model, obs, seed, ep_length, phase)
+                net_output_trace.append(net_record)
+
             obs, reward, terminated, truncated, _ = env.step(action)
             ep_reward += reward
             ep_length += 1
@@ -139,7 +153,38 @@ def evaluate_phase(
     weights = config.get("composite_score", {}).get(phase_key, {})
     metrics["composite_score"] = compute_composite_score(metrics, weights)
 
+    # Save raw network output trace if requested
+    if net_output_path and net_output_trace:
+        Path(net_output_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(net_output_path, "w") as f:
+            for rec in net_output_trace:
+                f.write(json.dumps(rec) + "\n")
+
     return metrics
+
+
+def _record_net_output(model, obs, episode, frame, phase) -> Dict:
+    """Capture raw policy logits and probabilities for a single observation.
+
+    Uses SB3's internal policy to get the distribution logits,
+    logs both raw logits and sigmoid probabilities for each action dimension.
+    """
+    record = {
+        "episode": episode,
+        "frame": frame,
+        "phase": phase,
+    }
+    try:
+        with torch.no_grad():
+            obs_t = torch.as_tensor(obs).unsqueeze(0).float().to(model.device)
+            dist = model.policy.get_distribution(obs_t)
+            logits = dist.logits.cpu().numpy().tolist()[0]
+            probs = (1.0 / (1.0 + np.exp(-np.array(logits)))).tolist()
+            record["logits"] = logits
+            record["probs"] = probs
+    except Exception as e:
+        record["error"] = str(e)
+    return record
 
 
 def compute_composite_score(metrics: Dict[str, float],

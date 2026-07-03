@@ -209,5 +209,6 @@
 - [x] **Phase 1.1 composite score 去 survival_rate (commit 876a382)** — `configs/phase1_fast.yaml` 中 Phase 1.1 删除 `survival_rate: 0.3`（永远 1.0，废权重），`normalized_approach` 从 0.3 增至 0.6。Phase 1.2/1.3 保留不变。
 - [x] **大幅降低 stall cap 防 reward 主导 (commit 0519266)** — `penalty_stall_cap` 从 0.167 降至 0.00167（除以 100）。原 cap 占总惩罚 98.8%，完全淹没了接近奖励（+0.033/格）和到达 bonus（+1.0）。调低后移动的净收益首次为正，agent 才有理由动。`rewards/phase1.py` _DEFAULT_CFG。
 - [x] **连续浮点曼哈顿距离 for approach/retreat (commit e90d58f)** — `_approach_and_retreat` 从整数格坐标 `(gx, gy)` 改为连续浮点坐标 `(fx, fy)`。每像素移动都产生比例奖励/惩罚，不再只在跨格线程时触发。`__call__` 中新增 `fx, fy, opp_fx, opp_fy, fdist` 计算（连续坐标 = (px - CELL_SIZE/2)/CELL_SIZE + 1）。`_pos_buffer` 和 `_prev_mdist` 均改为浮点。`_stall` 仍用整数 `(gx, gy)` 不变。
+- [x] **Reward 参数调优 (commit ef604f3)** — `reward_approach` 从 +0.033/格 调至 +0.231/格（7倍），`penalty_retreat` 从 -0.007/格 调至 -0.021/格（3倍）。配合连续浮点距离，让接近信号有足够强度驱动 agent 移动而非站桩。
 - [x] **热力图停滞检测 (40帧 distinct 窗口)** — 替换旧的基于对手距离的 `_stall(curr_mdist)`。现在用 40 帧滚动窗口累积 `(gx, gy)`，`distinct ≤ 2` 格判为停滞（不动或两格振荡），`distinct > 2` 重置计数器。完全解耦对手位置，消除震荡跨格线重置问题。
 - [x] **Phase 1.1 composite score 去 survival_rate** — `configs/phase1_fast.yaml` 中 Phase 1.1 删除 `survival_rate: 0.3`（永远 1.0，废权重），`normalized_approach` 从 0.3 增至 0.6。Phase 1.2/1.3 保留不变。
