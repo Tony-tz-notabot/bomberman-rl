@@ -213,5 +213,6 @@
 - [x] **连续浮点曼哈顿距离 for approach/retreat (commit e90d58f)** — `_approach_and_retreat` 从整数格坐标 `(gx, gy)` 改为连续浮点坐标 `(fx, fy)`。每像素移动都产生比例奖励/惩罚，不再只在跨格线程时触发。`__call__` 中新增 `fx, fy, opp_fx, opp_fy, fdist` 计算（连续坐标 = (px - CELL_SIZE/2)/CELL_SIZE + 1）。`_pos_buffer` 和 `_prev_mdist` 均改为浮点。`_stall` 仍用整数 `(gx, gy)` 不变。
 - [x] **Reward 参数调优 (commit ef604f3)** — `reward_approach` 从 +0.033/格 调至 +0.231/格（7倍），`penalty_retreat` 从 -0.007/格 调至 -0.021/格（3倍）。配合连续浮点距离，让接近信号有足够强度驱动 agent 移动而非站桩。
 - [x] **Loss 曲线 + 网络原始输出日志 (commit 09f7e28)** — `scripts/train_phase1.py` 新增 `LossRecorderCallback`，每次 PPO update 后记录 loss/policy_loss/value_loss/entropy/approx_kl 等到 `logs/losses_phaseXX.jsonl`。`src/evaluate.py` 新增 `_record_net_output()`，评估时每 24 帧记录一次网络原始 logits 和 sigmoid 概率到 `evaluations/phase_XX/step_XXXXXXX_net_output.jsonl`。`_evaluate()` 传递 `net_output_path` 给 `evaluate_phase`。
+- [x] **缩小碰撞箱 + 降低撞墙惩罚 (commit f948761)** — `PLAYER_HITBOX_SIZE` 0.8→0.6（碰撞箱 32px→24px，单边间隙 4px→8px），`penalty_wall` 0.01→0.003。走廊通过性明显改善，不再一碰就卡墙。
 - [x] **热力图停滞检测 (40帧 distinct 窗口)** — 替换旧的基于对手距离的 `_stall(curr_mdist)`。现在用 40 帧滚动窗口累积 `(gx, gy)`，`distinct ≤ 2` 格判为停滞（不动或两格振荡），`distinct > 2` 重置计数器。完全解耦对手位置，消除震荡跨格线重置问题。
 - [x] **Phase 1.1 composite score 去 survival_rate** — `configs/phase1_fast.yaml` 中 Phase 1.1 删除 `survival_rate: 0.3`（永远 1.0，废权重），`normalized_approach` 从 0.3 增至 0.6。Phase 1.2/1.3 保留不变。

@@ -178,7 +178,8 @@ def _record_net_output(model, obs, episode, frame, phase) -> Dict:
         with torch.no_grad():
             obs_t = torch.as_tensor(obs).unsqueeze(0).float().to(model.device)
             dist = model.policy.get_distribution(obs_t)
-            logits = dist.logits.cpu().numpy().tolist()[0]
+            # BernoulliDistribution stores logits inside a PyTorch Bernoulli distribution
+            logits = dist.distribution.logits.cpu().numpy().tolist()[0]
             probs = (1.0 / (1.0 + np.exp(-np.array(logits)))).tolist()
             record["logits"] = logits
             record["probs"] = probs
