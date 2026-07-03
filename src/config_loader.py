@@ -46,6 +46,13 @@ def load_config(path: str) -> Dict[str, Any]:
         if score_key not in config["composite_score"]:
             raise ValueError(f"Missing composite_score config for {score_key}")
 
+    # Validate n_envs if present (defaults to 1 later if absent)
+    n_envs = config.get("run", {}).get("n_envs", 1)
+    if not isinstance(n_envs, int) or n_envs < 1:
+        raise ValueError(
+            f"run.n_envs must be an int >= 1, got {n_envs!r} (type={type(n_envs).__name__})"
+        )
+
     return config
 
 

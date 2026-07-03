@@ -40,14 +40,28 @@ def _stationary_opponent(snapshot, agent_id):
     return np.zeros(6, dtype=np.int8)
 
 
-def _make_phase_aware_env(phase: float, config: Dict[str, Any], seed: int = 42):
-    """Create a BombermanEnv for the given phase with a patched reset
-    that preserves the phase across SB3-internal env.reset() calls.
+def _patch_env_reset(env, phase):
+    """Patch env.reset() to preserve phase when SB3 calls reset without options.
 
     SB3's BaseAlgorithm.__init__ and set_env() both call env.reset()
     without options, which would reset BombermanEnv._phase back to 1.1.
-    This factory patches the env instance so that optionless resets
-    always use the intended phase.
+    This patch ensures optionless resets always use the intended phase.
+    Works for both single envs and within SubprocVecEnv workers.
+    """
+    orig_reset = env.reset
+
+    def _preserve_phase_reset(*, seed=None, options=None):
+        if options is not None and ("phase" in options or "grid" in options):
+            return orig_reset(seed=seed, options=options)
+        return orig_reset(seed=seed, options={"phase": phase})
+
+    env.reset = _preserve_phase_reset
+    return env
+
+
+def _make_phase_aware_env(phase: float, config: Dict[str, Any], seed: int = 42):
+    """Create a BombermanEnv for the given phase with a patched reset
+    that preserves the phase across SB3-internal env.reset() calls.
     """
     reward_config = {"phase": phase}
     env = BombermanEnv(
@@ -55,21 +69,53 @@ def _make_phase_aware_env(phase: float, config: Dict[str, Any], seed: int = 42):
         opponent_fn=_stationary_opponent,
         timeout_frames=5400,
     )
+    _patch_env_reset(env, phase)
     # First reset: explicitly set the phase
     env.reset(options={"phase": phase}, seed=seed)
-
-    # Patch reset to preserve phase when called without options
-    orig_reset = env.reset
-    def _preserve_phase_reset(*, seed=None, options=None):
-        if options is not None and ("phase" in options or "grid" in options):
-            return orig_reset(seed=seed, options=options)
-        # SB3 (or DummyVecEnv) calls reset() with seed but no options;
-        # preserve the intended phase so map generation and success
-        # detection stay consistent.
-        return orig_reset(seed=seed, options={"phase": phase})
-    env.reset = _preserve_phase_reset
-
     return env
+
+
+def _make_env_fn(rank: int, phase: float, config: Dict[str, Any], base_seed: int):
+    """Return a picklable callable that creates a phase-aware env for a VecEnv worker.
+
+    Each worker gets a unique seed (base_seed + rank) for reproducibility.
+    The closure is serialized via cloudpickle inside SubprocVecEnv, so it
+    works correctly on Windows (spawn start method).
+    """
+    import os as _os
+    from rewards.phase1 import Phase1Reward  # ensure import in subprocess scope
+
+    # Prevent pygame from attempting display init in subprocesses
+    _os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+
+    def _make():
+        env = BombermanEnv(
+            render_mode="rgb_array",
+            reward_fn=Phase1Reward({"phase": phase}),
+            opponent_fn=_stationary_opponent,
+            timeout_frames=5400,
+        )
+        _patch_env_reset(env, phase)
+        env.reset(seed=base_seed + rank)
+        return env
+
+    return _make
+
+
+def _build_vec_env(phase: float, config: Dict[str, Any], seed: int):
+    """Create a vectorized environment for parallel experience collection.
+
+    If n_envs=1, returns a plain BombermanEnv (backward compatible).
+    If n_envs>1, returns a SubprocVecEnv with n_envs worker processes.
+    """
+    from stable_baselines3.common.vec_env import SubprocVecEnv
+
+    n_envs = config.get("run", {}).get("n_envs", 1)
+    if n_envs == 1:
+        return _make_phase_aware_env(phase, config, seed)
+
+    env_fns = [_make_env_fn(i, phase, config, seed) for i in range(n_envs)]
+    return SubprocVecEnv(env_fns)
 
 
 def _create_model(env, config: Dict[str, Any], device: str = "auto"):
@@ -232,17 +278,22 @@ class TrainingPipeline:
                     f"total_steps={self.total_timesteps}, best_score={self.best_composite_score:.4f}")
 
     def _setup_phase_env(self):
-        """Create env for current phase."""
+        """Create env for current phase (possibly vectorized)."""
         if self.env is not None:
             self.env.close()
-        self.env = _make_phase_aware_env(
+        self.env = _build_vec_env(
             self.current_phase, self.config, self.config["run"]["seed"]
         )
 
     def _create_phase_model(self):
-        """Create fresh PPO model for current phase."""
+        """Create fresh PPO model for current phase with adjusted n_steps."""
         device = self.config.get("device", "auto")
-        self.model = _create_model(self.env, self.config, device)
+        n_envs = self.config.get("run", {}).get("n_envs", 1)
+        total_n_steps = self.config["ppo"]["n_steps"]
+        per_env_steps = max(1, total_n_steps // n_envs)
+        ppo_cfg = dict(self.config["ppo"])
+        ppo_cfg["n_steps"] = per_env_steps
+        self.model = _create_model(self.env, {**self.config, "ppo": ppo_cfg}, device)
         # Set tensorboard log dir only if tensorboard is available
         # (gracefully degrades for CI / minimal installs)
         tb_log = str(self.run_dir / "logs" / f"phase_{int(self.current_phase * 10)}")
@@ -289,18 +340,31 @@ class TrainingPipeline:
         )
 
     def _evaluate(self) -> Optional[Dict[str, float]]:
-        """Run evaluation and return metrics."""
+        """Run evaluation and return metrics.
+
+        Uses a separate single env (not the training VecEnv) because
+        evaluate_phase accesses env.engine.grid directly.
+        """
         phase_key = f"phase_{int(self.current_phase * 10)}"
         eval_cfg = self.config["evaluation"]
         num_episodes = eval_cfg["episodes"]
         seeds = [self.config["run"]["seed"] + i for i in range(num_episodes)]
 
-        metrics = evaluate_phase(
-            self.model, self.env, self.config,
-            phase=self.current_phase,
-            num_episodes=num_episodes,
-            seeds=seeds,
+        # Create a single eval env (not vectorized) for evaluate_phase
+        eval_env = _make_phase_aware_env(
+            self.current_phase, self.config, self.config["run"]["seed"]
         )
+
+        try:
+            metrics = evaluate_phase(
+                self.model, eval_env, self.config,
+                phase=self.current_phase,
+                num_episodes=num_episodes,
+                seeds=seeds,
+            )
+        finally:
+            eval_env.close()
+
         metrics["total_timesteps"] = self.total_timesteps
         metrics["phase_timesteps"] = self.phase_timesteps
         metrics["elapsed_time"] = time.time() - self._start_wall

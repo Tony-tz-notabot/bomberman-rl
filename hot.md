@@ -30,6 +30,11 @@
 - [x] **Task 10: main.py 精简为胶水代码** — main.py 从 1250 行精简至 138 行，仅导入模块+主循环，无游戏逻辑
 - [x] **Task 11: 最终验证** — 99 测试全通过，GameEngine 零 pygame 依赖验证通过，smoke test 移除，gitignore 添加
 
+### 2026-07-03
+- [x] **scripts/README.md** — 编写训练脚本目录 README，包含 train_phase1.py 简介、CLI 参数表、课程阶段说明、输出结构、常用命令示例
+- [x] **README.md 全面更新** — 反映当前项目状态：9通道观测、src/ 目录结构、训练管道（configs/scripts/rewards）、185+ 测试、CUDA 自动检测、Phase1Reward、全套文件树
+- [x] **CUDA 自动检测确认** — `device: auto` 默认通过 `torch.cuda.is_available()` 自动检测，无需手动指定
+
 ## 🚧 当前进度
 
 **阶段：Phase 2 — Gym 环境封装 — 全部完成 ✅**
@@ -175,3 +180,21 @@
     - CLI: --config, --resume, --total-steps-override, --eval-interval, --device, --override-config
   - `tests/test_training_pipeline.py` — 5 smoke tests including real PPO training
   - 5/5 smoke tests passing, full suite 185/185 passing
+  - **Fix round (commit 31691f9):** 全部 8 个 final review findings 修复:
+    - Critical: phase 1.3 提前达标时的无限循环修复 (sentinel `2.0`)
+    - Important: `normalized_approach` 指标改为从 final distance 代理计算
+    - Important: `--override-config` CLI 参数现在实际生效
+    - Important: `VideoRecorder.record_episode` 接受 phase 参数
+    - Minor: 移除双重 final checkpoint / 添加 tb_log_name / 移除死代码 load_checkpoint / 全局 RNG 改为函数级单次 seed
+- [x] **Git Hook: 自动 Co-authored-by 追加**
+  - `.githooks/prepare-commit-msg` — 每次 commit 自动追加 `Co-authored-by: samurazdenko`
+  - `core.hooksPath` 配置为 `.githooks`，跨克隆持久化
+
+### 2026-07-03
+- [x] **scripts/README.md** — 编写训练脚本目录 README，包含 train_phase1.py 简介、CLI 参数表、课程阶段说明、输出结构、常用命令示例
+- [x] **README.md 全面更新** — 反映当前项目状态：9通道观测、src/ 目录结构、训练管道、185+ 测试、CUDA 自动检测、Phase1Reward、完整文件树
+- [x] **Phase 1: Config n_envs 参数** — `configs/phase1_fast.yaml` 添加 `run.n_envs: 8`，`config_loader.py` 增加 `int >= 1` 验证，5 个测试
+- [x] **Phase 2: VecEnv 工厂函数** — 提取 `_patch_env_reset()` 独立函数；新增 `_make_env_fn()` picklable worker 工厂 + `_build_vec_env()`（n_envs=1 保持单 env 向后兼容）；4 个测试
+- [x] **Phase 3: Pipeline 集成 VecEnv** — `_setup_phase_env()` 改用 `_build_vec_env()`；`_create_phase_model()` 自动调整 `n_steps // n_envs`；`_evaluate()` 改用独立的单 eval env（不依赖训练 VecEnv）；phase 推进正确重建 VecEnv；5 个测试
+- [x] **Phase 4: 边界 & 端到端** — n_envs=1 向后兼容验证；n_envs=2 完整训练 + 评估 + 检查点通过；n_envs=32 不崩溃；config hash 稳定；4 个测试
+- [x] **全量测试: 202 passed** — 原有 185 测试 + 17 个新测试全部通过，零回归

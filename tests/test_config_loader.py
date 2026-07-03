@@ -1,6 +1,7 @@
 """Tests for config loader."""
 import pytest
 from src.config_loader import load_config, compute_config_hash
+import yaml
 
 class TestConfigLoader:
     def test_load_valid_config(self, tmp_path):
@@ -101,3 +102,85 @@ device: auto
         cfg1 = {"a": 1}
         cfg2 = {"a": 2}
         assert compute_config_hash(cfg1) != compute_config_hash(cfg2)
+
+
+class TestNEnvsValidation:
+    """Validation of run.n_envs config parameter."""
+
+    @pytest.fixture
+    def valid_base(self, tmp_path):
+        """Create a minimal valid config without n_envs."""
+        data = {
+            "run": {"output_dir": "runs/test", "seed": 42},
+            "ppo": {"learning_rate": 3e-4, "n_steps": 2048, "batch_size": 64,
+                    "n_epochs": 10, "gamma": 0.99, "gae_lambda": 0.95,
+                    "clip_range": 0.2, "ent_coef": 0.01, "vf_coef": 0.5,
+                    "max_grad_norm": 0.5},
+            "network": {"features_dim": 256},
+            "phases": {"1.1": {"min_steps": 100, "max_steps": 200},
+                       "1.2": {"min_steps": 100, "max_steps": 200},
+                       "1.3": {"min_steps": 100, "max_steps": 200}},
+            "evaluation": {"interval": 100, "episodes": 1, "video_episodes": 0},
+            "composite_score": {"phase_1_1": {"survival_rate": 1.0},
+                                "phase_1_2": {"survival_rate": 1.0},
+                                "phase_1_3": {"survival_rate": 1.0}},
+            "progression": {"composite_threshold": 0.5, "patience": 3},
+            "checkpoint": {"interval": 200},
+            "logging": {"heartbeat_seconds": 3600},
+            "device": "cpu",
+        }
+        path = tmp_path / "base.yaml"
+        with open(path, "w") as f:
+            yaml.dump(data, f)
+        return str(path)
+
+    def test_n_envs_default_optional(self, valid_base):
+        """n_envs not specified → loads without error, defaults to 1."""
+        cfg = load_config(valid_base)
+        # Should exist with default value 1
+        assert cfg.get("run", {}).get("n_envs", 1) == 1
+
+    def test_n_envs_valid_int(self, valid_base, tmp_path):
+        """n_envs=8 loads fine."""
+        path = tmp_path / "with_n_envs.yaml"
+        with open(valid_base) as f:
+            data = yaml.safe_load(f)
+        data["run"]["n_envs"] = 8
+        with open(path, "w") as f:
+            yaml.dump(data, f)
+        cfg = load_config(str(path))
+        assert cfg["run"]["n_envs"] == 8
+
+    def test_n_envs_invalid_zero(self, valid_base, tmp_path):
+        """n_envs=0 raises ValueError."""
+        path = tmp_path / "zero.yaml"
+        with open(valid_base) as f:
+            data = yaml.safe_load(f)
+        data["run"]["n_envs"] = 0
+        with open(path, "w") as f:
+            yaml.dump(data, f)
+        with pytest.raises(ValueError, match="n_envs"):
+            load_config(str(path))
+
+    def test_n_envs_invalid_negative(self, valid_base, tmp_path):
+        """n_envs=-1 raises ValueError."""
+        path = tmp_path / "neg.yaml"
+        with open(valid_base) as f:
+            data = yaml.safe_load(f)
+        data["run"]["n_envs"] = -1
+        with open(path, "w") as f:
+            yaml.dump(data, f)
+        with pytest.raises(ValueError, match="n_envs"):
+            load_config(str(path))
+
+    def test_n_envs_invalid_type(self, valid_base, tmp_path):
+        """n_envs="abc" or 1.5 raises ValueError."""
+        for bad_val in ("abc", 1.5):
+            path = tmp_path / f"bad_{type(bad_val).__name__}.yaml"
+            with open(valid_base) as f:
+                data = yaml.safe_load(f)
+            data["run"]["n_envs"] = bad_val
+            with open(path, "w") as f:
+                yaml.dump(data, f)
+            with pytest.raises(ValueError, match="n_envs"):
+                load_config(str(path))
