@@ -204,3 +204,6 @@
 - [x] **docs/kaggle_training.ipynb** — 编写 Kaggle 云端训练 Notebook，包含依赖安装、项目代码拷贝、配置调优、自动续训检测、产出打包下载完整流程
 - [x] **评估指标修复 (commit c18c853)** — `normalized_approach` 和 `low_final_distance` 改用每局实际初始距离做分母（替代硬编码的 30 格），因为 Phase 1.1 蓝方随机出生，初始距离并非固定 30。
 - [x] **Phase 1.1 炸弹禁用修复 (commit 266d28b)** — 防止 agent 自爆 exploit（开局放弹自杀结束 episode 以避免后续惩罚累加）。在 `BombermanEnv.step()` 中 Phase 1.1 时将 `action[4]`(放弹) 和 `action[5]`(引爆) 强制置 0。Phase 1.2/1.3 不受影响。
+- [x] **Phase 1.1 每帧生存时间惩罚 (commit 7f67c57)** — 无炸弹、不会死的情况下用 `-0.002/frame` 惩罚制造紧迫感。仅 Phase 1.1 生效，整局约 -10.8。
+- [x] **热力图停滞检测 (40帧 distinct 窗口)** — 替换旧的基于对手距离的 `_stall(curr_mdist)`。现在用 40 帧滚动窗口累积 `(gx, gy)`，`distinct ≤ 2` 格判为停滞（不动或两格振荡），`distinct > 2` 重置计数器。完全解耦对手位置，消除震荡跨格线重置问题。
+- [x] **Phase 1.1 composite score 去 survival_rate** — `configs/phase1_fast.yaml` 中 Phase 1.1 删除 `survival_rate: 0.3`（永远 1.0，废权重），`normalized_approach` 从 0.3 增至 0.6。Phase 1.2/1.3 保留不变。

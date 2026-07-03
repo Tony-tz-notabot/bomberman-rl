@@ -1,5 +1,6 @@
 """Phase 1 curriculum reward: basic operations and survival learning."""
 import math
+from collections import deque
 from typing import Optional, Dict, Any
 from src.config import cfg
 from src.constants import CELL_STONE, CELL_BRICK
@@ -43,6 +44,7 @@ class Phase1Reward(RewardFunction):
         self._prev_avg_x = self._prev_avg_y = None
         self._prev_mdist = None
         self._stall_frames = 0
+        self._pos_trace = deque(maxlen=40)
     def __call__(self, engine, prev_snap, snap, action, agent_id):
         self._frame += 1
         w = self._PHASE_WEIGHTS.get(self.cfg["phase"], self._PHASE_WEIGHTS[1.1])
@@ -56,7 +58,7 @@ class Phase1Reward(RewardFunction):
         reward += w["p11"] * self._survival(curr_self.alive)
         reward += w["p11"] * self._approach_and_retreat(gx, gy, opp_gx, opp_gy, curr_mdist)
         reward += w["p11"] * self._center_deviation(curr_self)
-        reward += w["p11"] * self._stall(curr_mdist)
+        reward += w["p11"] * self._stall(gx, gy)
         reward += w["p11"] * self._wall_collision(action[:4], prev_self, curr_self)
         reward += w["p11"] * self._illegal_action(action[4], action[5], action[:4], prev_self, curr_self)
         reward += w["p11"] * self._death(prev_self, prev_snap, snap, agent_id)
@@ -115,8 +117,13 @@ class Phase1Reward(RewardFunction):
         norm = dev / (cfg.CELL_SIZE / 2)
         return -self.cfg["penalty_center_dev"] * (norm * norm)
 
-    def _stall(self, curr_mdist) -> float:
-        if self._prev_mdist is not None and curr_mdist < self._prev_mdist:
+    def _stall(self, gx, gy) -> float:
+        """40-frame rolling heatmap: stalled if distinct grid cells ≤ 2."""
+        self._pos_trace.append((gx, gy))
+        if len(self._pos_trace) < 40:
+            return 0.0
+        distinct = len(set(self._pos_trace))
+        if distinct > 2:
             self._stall_frames = 0
         else:
             self._stall_frames += 1

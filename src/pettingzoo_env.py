@@ -6,7 +6,7 @@ Imports build_obs from bomberman_env as shared observation builder.
 import numpy as np
 import pygame
 from typing import Optional
-from gym import spaces
+from gymnasium import spaces
 from pettingzoo import ParallelEnv
 
 from src.config import cfg

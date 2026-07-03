@@ -39,8 +39,7 @@ evaluation:
 
 composite_score:
   phase_1_1:
-    survival_rate: 0.3
-    normalized_approach: 0.3
+    normalized_approach: 0.6
     low_illegal_action_rate: 0.2
     low_final_distance: 0.2
   phase_1_2:

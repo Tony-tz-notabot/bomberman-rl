@@ -2,7 +2,7 @@
 import numpy as np
 import torch
 import pytest
-from gym import spaces
+from gymnasium import spaces
 from src.feature_extractor import ResCnnFeatureExtractor
 
 
