@@ -3,6 +3,9 @@ bomberman version 2.0.2
 """
 import pygame
 import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.config import cfg
 

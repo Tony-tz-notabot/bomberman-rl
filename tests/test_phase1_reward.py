@@ -130,8 +130,8 @@ def test_wall_collision(engine, p1_reward):
     # Move up (action[0]=1)
     action = np.array([1, 0, 0, 0, 0, 0], dtype=np.int8)
     reward = p1_reward(engine, snap, snap, action, "red")
-    # -0.01 wall + -0.002 survival
-    assert reward == pytest.approx(-0.012)
+    # -0.003 wall + -0.002 survival
+    assert reward == pytest.approx(-0.005)
 
 
 def test_death_self_bomb(engine):

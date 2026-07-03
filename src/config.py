@@ -23,7 +23,7 @@ class Config:
         self.MAX_BOMB_CAP = 7
         self.INIT_BLAST_RANGE = 2
         self.MAX_BLAST_RANGE = 8
-        self.PLAYER_HITBOX_SIZE = 0.8
+        self.PLAYER_HITBOX_SIZE = 0.6
         self.BOMB_FUSE = 48              # = 2.0 × 24
         self.BOMB_FLICKER_START = 12      # = 0.5 × 24
         self.DEATH_ANIM_DUR = 12          # = 0.5 × 24
