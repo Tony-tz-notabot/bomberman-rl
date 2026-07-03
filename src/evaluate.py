@@ -46,6 +46,7 @@ def evaluate_phase(
 
     all_rewards: List[float] = []
     all_survived: List[float] = []
+    all_initial_dist: List[float] = []
     all_final_dist: List[float] = []
     all_illegal_counts: List[int] = []
     all_bomb_counts: List[int] = []
@@ -59,8 +60,12 @@ def evaluate_phase(
         obs, _ = env.reset(options={"phase": phase}, seed=seed)
 
         # Snapshot the grid before any actions to count brick destruction
+        init_snap = env.engine.get_snapshot()
         grid_before = copy.deepcopy(env.engine.grid)
-        bombs_before = env.engine.get_snapshot().players[0].bomb_placed_count
+        bombs_before = init_snap.players[0].bomb_placed_count
+        red_init = init_snap.players[0]
+        blue_init = init_snap.players[1]
+        initial_dist = abs(red_init.grid_x - blue_init.grid_x) + abs(red_init.grid_y - blue_init.grid_y)
 
         ep_reward = 0.0
         ep_length = 0
@@ -97,6 +102,7 @@ def evaluate_phase(
 
         all_buff_counts.append(buffs_picked)
         all_rewards.append(ep_reward)
+        all_initial_dist.append(initial_dist)
         all_survived.append(1.0 if red.alive else 0.0)
         all_final_dist.append(abs(red.grid_x - blue.grid_x) + abs(red.grid_y - blue.grid_y))
         all_illegal_counts.append(illegal_count)
@@ -111,6 +117,7 @@ def evaluate_phase(
         "num_episodes": num_eps,
         "mean_eval_reward": float(np.mean(all_rewards)),
         "survival_rate": float(np.mean(all_survived)),
+        "mean_initial_distance": float(np.mean(all_initial_dist)),
         "mean_final_distance_to_blue": float(np.mean(all_final_dist)),
         "illegal_action_rate": float(np.sum(all_illegal_counts)) / max(np.sum(all_lengths), 1),
         "mean_bomb_count": float(np.mean(all_bomb_counts)),
@@ -121,11 +128,11 @@ def evaluate_phase(
         "timestamp": time.time(),
     }
 
-    # Add normalized_approach proxy if not already present
+    # Add normalized_approach using actual initial distance
     if "normalized_approach" not in metrics:
-        max_dist = cfg.MAP_COLS + cfg.MAP_ROWS
+        init_d = metrics.get("mean_initial_distance", cfg.MAP_COLS + cfg.MAP_ROWS)
         metrics["normalized_approach"] = max(
-            0.0, 1.0 - metrics.get("mean_final_distance_to_blue", float(max_dist)) / max_dist
+            0.0, 1.0 - metrics.get("mean_final_distance_to_blue", init_d) / max(init_d, 1)
         )
 
     # Compute composite score
@@ -177,7 +184,8 @@ def _normalize_metric(key: str, metrics: Dict[str, float],
         return max(0.0, 1.0 - rate)
     elif key == "low_final_distance":
         dist = metrics.get("mean_final_distance_to_blue", float(max_dist))
-        return max(0.0, 1.0 - dist / max_dist)
+        init_d = metrics.get("mean_initial_distance", float(max_dist))
+        return max(0.0, 1.0 - dist / max(init_d, 1))
     elif key == "bomb_efficiency":
         bombs = metrics.get("mean_bomb_count", 1)
         bricks = metrics.get("mean_brick_destroy_count", 0)
@@ -197,7 +205,7 @@ def format_metrics(metrics: Dict[str, float]) -> str:
     """Format metrics dict into a human-readable string for logging."""
     parts = []
     for key in ("mean_eval_reward", "survival_rate", "composite_score",
-                "mean_final_distance_to_blue", "illegal_action_rate",
+                "mean_initial_distance", "mean_final_distance_to_blue", "illegal_action_rate",
                 "mean_bomb_count", "mean_brick_destroy_count",
                 "kill_rate", "mean_episode_length"):
         if key in metrics:
