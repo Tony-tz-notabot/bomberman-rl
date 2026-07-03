@@ -236,7 +236,8 @@ class TestBombermanEnv:
             timeout_frames=10,
             reward_fn=Phase1Reward({"reward_survive": 0, "reward_approach": 0,
                 "penalty_retreat": 0, "penalty_center_dev": 0, "penalty_wall": 0,
-                "penalty_illegal_bomb_cap": 0, "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0})
+                "penalty_illegal_bomb_cap": 0, "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0,
+                "penalty_survive_time": 0})
         )
         env.reset(options={"phase": 1.1})
         for i in range(9):

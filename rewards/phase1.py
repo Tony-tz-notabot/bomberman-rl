@@ -15,6 +15,7 @@ class Phase1Reward(RewardFunction):
         "penalty_stall_threshold": 30, "penalty_stall_init": 0.007, "penalty_stall_cap": 0.167,
         "penalty_wall": 0.01,
         "reward_survive": 0.0,  # was 0.0003
+        "penalty_survive_time": 0.002,  # Phase 1.1 only: per-frame drain to create urgency
         "penalty_illegal_bomb_cap": 0.033,
         "penalty_illegal_ignite": 0.017, "penalty_illegal_dir": 0.017,
         "penalty_death_self": 0.333, "penalty_death_opp": 0.167,
@@ -72,7 +73,12 @@ class Phase1Reward(RewardFunction):
     # ── Phase 1.1: Basic survival & movement ──
 
     def _survival(self, alive: bool) -> float:
-        return self.cfg["reward_survive"] if alive else 0.0
+        if not alive:
+            return 0.0
+        # Phase 1.1: no bombs, can't die — per-frame penalty creates urgency to reach blue
+        if int(self.cfg.get("phase", 1.1) * 10) == 11:
+            return -self.cfg.get("penalty_survive_time", 0.002)
+        return self.cfg.get("reward_survive", 0.0)
 
     def _approach_and_retreat(self, gx, gy, opp_gx, opp_gy, curr_mdist) -> float:
         reward = 0.0

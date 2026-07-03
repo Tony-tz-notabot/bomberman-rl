@@ -27,11 +27,11 @@ def _take_snap(engine):
 # ── Phase 1.1: Survival & illegal action ──
 
 def test_survival_alive(engine, p1_reward):
-    """Alive agent gets survival reward per frame."""
+    """Alive in Phase 1.1 gets per-frame survival penalty."""
     snap = _take_snap(engine)
     action = np.zeros(6, dtype=np.int8)
     reward = p1_reward(engine, snap, snap, action, "red")
-    assert reward == 0.0
+    assert reward == pytest.approx(-0.002)
 
 
 def test_illegal_bomb_cap(engine, p1_reward):
@@ -39,8 +39,8 @@ def test_illegal_bomb_cap(engine, p1_reward):
     snap = _take_snap(engine)
     action = np.array([0, 0, 0, 0, 1, 0], dtype=np.int8)  # action=1
     reward = p1_reward(engine, snap, snap, action, "red")
-    # -illegal_bomb_cap + survival
-    assert reward == pytest.approx(-0.033)
+    # -illegal_bomb_cap + survival_penalty
+    assert reward == pytest.approx(-0.035)
 
 
 # ── Phase 1.1: Approach/retreat, center deviation, stall ──
@@ -104,8 +104,8 @@ def test_center_deviation_off_center(engine, p1_reward):
     snap = _take_snap(engine)
     action = np.zeros(6, dtype=np.int8)
     reward = p1_reward(engine, prev, snap, action, "red")
-    # Center dev: -0.013 * (10/20)² = -0.00325, plus survival 0.0
-    assert reward == pytest.approx(-0.003, abs=0.001)
+    # Center dev: -0.013 * (10/20)² = -0.00325, plus survival -0.002
+    assert reward == pytest.approx(-0.005, abs=0.001)
 
 
 def test_stall_penalty(engine, p1_reward):
@@ -129,8 +129,8 @@ def test_wall_collision(engine, p1_reward):
     # Move up (action[0]=1)
     action = np.array([1, 0, 0, 0, 0, 0], dtype=np.int8)
     reward = p1_reward(engine, snap, snap, action, "red")
-    # -0.01 wall + 0.0 survival
-    assert reward == pytest.approx(-0.01)
+    # -0.01 wall + -0.002 survival
+    assert reward == pytest.approx(-0.012)
 
 
 def test_death_self_bomb(engine):
@@ -300,6 +300,7 @@ def test_phase_12_weights(engine):
                         "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0,
                         "penalty_death_self": 0, "penalty_death_opp": 0,
                         "penalty_death_self_bomb": 0, "penalty_death_opp_bomb": 0,
+                        "penalty_survive_time": 0,
                         "reward_place_bomb": 0.1, "reward_destroy_brick_fwd": 0,
                         "reward_destroy_brick_side": 0, "penalty_bomb_wasted": 0,
                         "reward_pickup_normal": 0, "reward_pickup_unknown": 0})
@@ -309,6 +310,7 @@ def test_phase_12_weights(engine):
                         "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0,
                         "penalty_death_self": 1.0, "penalty_death_opp": 0.5,
                         "penalty_death_self_bomb": 3.0, "penalty_death_opp_bomb": 1.5,
+                        "penalty_survive_time": 0,
                         "reward_place_bomb": 0.1, "reward_destroy_brick_fwd": 0,
                         "reward_destroy_brick_side": 0, "penalty_bomb_wasted": 0,
                         "reward_pickup_normal": 0, "reward_pickup_unknown": 0})
