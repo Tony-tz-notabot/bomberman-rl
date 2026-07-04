@@ -81,7 +81,10 @@ def evaluate_phase(
         done = False
 
         while not done:
-            action, _ = model.predict(obs, deterministic=True)
+            # Deterministic action via argmax (not logit>0 threshold):
+            # picks the single dimension with the highest logit as a one-hot,
+            # guaranteeing the agent always outputs at least one action.
+            action = _argmax_action(model, obs)
 
             # Record raw network output every 24 frames
             if net_output_path and ep_length % 24 == 0:
@@ -91,10 +94,6 @@ def evaluate_phase(
             obs, reward, terminated, truncated, _ = env.step(action)
             ep_reward += reward
             ep_length += 1
-
-            # Count illegal actions (opposing direction keys)
-            if (action[0] and action[1]) or (action[2] and action[3]):
-                illegal_count += 1
 
             done = terminated or truncated
 
@@ -186,6 +185,24 @@ def _record_net_output(model, obs, episode, frame, phase) -> Dict:
     except Exception as e:
         record["error"] = str(e)
     return record
+
+
+def _argmax_action(model, obs):
+    """Return a one-hot action by picking the dimension with the highest logit.
+
+    Unlike SB3's default BernoulliDistribution.mode() which rounds
+    sigmoid(logit) > 0.5 per dimension (and can produce all zeros when
+    all logits < 0), argmax always produces exactly one active dimension.
+    This prevents the agent from deterministically outputting zeros.
+    """
+    with torch.no_grad():
+        obs_t = torch.as_tensor(obs).unsqueeze(0).float().to(model.device)
+        dist = model.policy.get_distribution(obs_t)
+        logits = dist.distribution.logits  # shape (1, 6)
+        best = torch.argmax(logits, dim=-1).item()  # 0-5
+    action = np.zeros(6, dtype=np.int8)
+    action[best] = 1
+    return action
 
 
 def compute_composite_score(metrics: Dict[str, float],
