@@ -221,3 +221,4 @@
 - [x] **argmax 替代 >0.5 阈值用于确定性评估 (commit f1f3272)** — 修复确定性评估全零问题。`model.predict(deterministic=True)` 使用 BernoulliDistribution.mode() 逐维 round(sigmoid(logit)>0.5)，初始化 logits ~ O(0.01) 时一次 PPO update 即可将全部 logits 推负 → 输出全零。新增 `_argmax_action()` 函数用 `torch.argmax(logits)` 选最高 logit 维度输出 one-hot，保证始终至少一个动作。移除旧的对向键惩罚计数器（argmax 保证不存在对向键）。25 测试通过。
 - [x] **翻倍接近/后退奖励 (commit 8826070)** — reward_approach 2.0→4.0, penalty_retreat 0.02→0.04。接近信号现在是碰墙惩罚的 ~130 倍。
 - [x] **关闭评估视频录制** — `configs/phase1_fast.yaml` video_episodes 2→0。节省评估时间。
+- [x] **罚值重平衡: center 20%, retreat 10% of approach (commit f0c17b9)** — penalty_retreat 0.04→0.40, penalty_center_dev 0.013→0.33。使 center_dev（偏中线10px时 -0.083/帧）占 approach 的 20%，retreat（远离时 -0.042/帧）占 10%。wall/stall 占比 <1%。15 测试通过。
