@@ -222,3 +222,4 @@
 - [x] **翻倍接近/后退奖励 (commit 8826070)** — reward_approach 2.0→4.0, penalty_retreat 0.02→0.04。接近信号现在是碰墙惩罚的 ~130 倍。
 - [x] **关闭评估视频录制** — `configs/phase1_fast.yaml` video_episodes 2→0。节省评估时间。
 - [x] **罚值重平衡: center 20%, retreat 10% of approach (commit f0c17b9)** — penalty_retreat 0.04→0.40, penalty_center_dev 0.013→0.33。使 center_dev（偏中线10px时 -0.083/帧）占 approach 的 20%，retreat（远离时 -0.042/帧）占 10%。wall/stall 占比 <1%。15 测试通过。
+- [x] **中线惩罚→奖励, 安全区线性奖励 (commit e9141e3)** — 去掉 penalty_center_dev，新增 reward_center 0.02。安全区 8px（(40-24)/2，hitbox 24px 不碰墙区间），安全区内线性从 +0.02(中心)降至 0(边界)。十字路口改用 max(X,Y) 取代 min。期望值 +0.005/帧 ≈ 5% of approach，不超过 7% 上限。17 测试通过。
