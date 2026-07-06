@@ -11,7 +11,7 @@ from rewards import RewardFunction
 class Phase1Reward(RewardFunction):
     _DEFAULT_CFG = {
         "reward_approach": 4.0, "penalty_retreat": 0.40,
-        "penalty_center_dev": 0.33,
+        "reward_center": 0.02,
         "penalty_stall_threshold": 30, "penalty_stall_init": 0.007, "penalty_stall_cap": 0.00167,
         "penalty_wall": 0.003,
         "reward_survive": 0.0,
@@ -95,18 +95,32 @@ class Phase1Reward(RewardFunction):
         return 0.0
 
     def _center_deviation(self, player) -> float:
+        """Reward for staying near corridor centerline (avoids wall collisions).
+
+        Safe zone = half the clearance between player hitbox and walls:
+          (CELL_SIZE * (1 - PLAYER_HITBOX_SIZE)) / 2
+        = (40 * 0.4) / 2 = 8px.
+
+        Within safe_zone: linear reward from max at center to 0 at edge.
+        Outside safe_zone: 0 (player is already scraping walls).
+
+        At cross intersections (gx odd, gy odd): uses max(X,Y) deviation,
+        requiring both axes to be centered.
+        """
         gx, gy = player.grid_x, player.grid_y
         if gx % 2 == 0 and gy % 2 == 0:
             return 0.0  # stone cell — shouldn't occur
         cx, cy = grid_center(gx, gy)
+        safe_zone = (cfg.CELL_SIZE * (1.0 - cfg.PLAYER_HITBOX_SIZE)) / 2.0  # 8px
         if gx % 2 == 1 and gy % 2 == 1:
-            dev = min(abs(player.pos_x - cx), abs(player.pos_y - cy))
+            dev = max(abs(player.pos_x - cx), abs(player.pos_y - cy))
         elif gy % 2 == 1:
             dev = abs(player.pos_y - cy)  # horizontal corridor: Y deviation
         else:
             dev = abs(player.pos_x - cx)  # vertical corridor: X deviation
-        norm = dev / (cfg.CELL_SIZE / 2)
-        return -self.cfg["penalty_center_dev"] * (norm * norm)
+        if dev >= safe_zone:
+            return 0.0
+        return self.cfg["reward_center"] * (1.0 - dev / safe_zone)
 
     def _stall(self, gx, gy) -> float:
         """40-frame rolling heatmap: stalled if distinct grid cells ≤ 2."""

@@ -17,7 +17,7 @@ def engine():
 
 @pytest.fixture
 def p1_reward():
-    return Phase1Reward({"phase": 1.1})
+    return Phase1Reward({"phase": 1.1, "reward_center": 0})
 
 
 def _take_snap(engine):
@@ -108,20 +108,53 @@ def test_approach_reward_positive(engine, p1_reward):
     p1_reward.cfg["penalty_retreat"] = cfg_copy.get("penalty_retreat", 0.0)
 
 
-def test_center_deviation_off_center(engine, p1_reward):
-    """Player far from corridor center gets penalty."""
-    # Place on center of a horizontal corridor cell
+def test_center_reward_at_center(engine):
+    """Player at corridor center gets max center reward."""
+    rw = Phase1Reward({"phase": 1.1, "reward_center": 0.02, "penalty_center_dev": 0,
+                        "penalty_wall": 0, "penalty_illegal_bomb_cap": 0,
+                        "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0})
     gx, gy = 2, 3  # gy=3 odd → horizontal corridor
     cx, cy = grid_center(gx, gy)
-    # Snap with player at center
     engine.red_player.pos_x, engine.red_player.pos_y = cx, cy
-    prev = _take_snap(engine)
-    engine.red_player.pos_y = cy + 10  # 10px off center
     snap = _take_snap(engine)
     action = np.zeros(6, dtype=np.int8)
-    reward = p1_reward(engine, prev, snap, action, "red")
-    # Center dev: -0.33 * (10/20)² = -0.0825, plus survival 0.0
-    assert reward == pytest.approx(-0.083, abs=0.001)
+    # Warm-up then get the reward
+    rw(engine, snap, snap, action, "red")
+    reward = rw(engine, snap, snap, action, "red")
+    # At center (dev=0): reward = 0.02 * (1 - 0/8) = 0.02
+    assert reward == pytest.approx(0.02, abs=0.001)
+
+
+def test_center_reward_partial(engine):
+    """Player 4px off center gets proportional reward."""
+    rw = Phase1Reward({"phase": 1.1, "reward_center": 0.02, "penalty_center_dev": 0,
+                        "penalty_wall": 0, "penalty_illegal_bomb_cap": 0,
+                        "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0})
+    gx, gy = 2, 3
+    cx, cy = grid_center(gx, gy)
+    engine.red_player.pos_x, engine.red_player.pos_y = cx, cy + 4
+    snap = _take_snap(engine)
+    action = np.zeros(6, dtype=np.int8)
+    rw(engine, snap, snap, action, "red")
+    reward = rw(engine, snap, snap, action, "red")
+    # At 4px off: 0.02 * (1 - 4/8) = 0.01
+    assert reward == pytest.approx(0.01, abs=0.001)
+
+
+def test_center_reward_outside_safe_zone(engine):
+    """Player >8px off center gets no center reward (scraping walls)."""
+    rw = Phase1Reward({"phase": 1.1, "reward_center": 0.02, "penalty_center_dev": 0,
+                        "penalty_wall": 0, "penalty_illegal_bomb_cap": 0,
+                        "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0})
+    gx, gy = 2, 3
+    cx, cy = grid_center(gx, gy)
+    engine.red_player.pos_x, engine.red_player.pos_y = cx, cy + 12
+    snap = _take_snap(engine)
+    action = np.zeros(6, dtype=np.int8)
+    rw(engine, snap, snap, action, "red")
+    reward = rw(engine, snap, snap, action, "red")
+    # Outside safe zone = 0 reward
+    assert reward == pytest.approx(0.0, abs=0.001)
 
 
 def test_stall_penalty(engine, p1_reward):
@@ -250,7 +283,7 @@ def test_kill_opponent_reward(engine):
     """Killing the opponent gives +4.0 reward."""
     reward = Phase1Reward({"phase": 1.2,
         "reward_approach": 0, "penalty_retreat": 0,
-        "penalty_center_dev": 0, "penalty_wall": 0,
+        "reward_center": 0, "penalty_wall": 0,
         "penalty_illegal_bomb_cap": 0, "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0,
         "penalty_death_self": 0, "penalty_death_opp": 0,
         "penalty_death_self_bomb": 0, "penalty_death_opp_bomb": 0,
@@ -285,7 +318,7 @@ def test_kill_opponent_reward(engine):
 
 def test_buff_pickup_reward(engine):
     """Picking up a buff gives +0.2."""
-    reward = Phase1Reward({"phase": 1.3})
+    reward = Phase1Reward({"phase": 1.3, "reward_center": 0})
     engine.reset_match()
     # Place a buff near the player
     from src.models import BuffItem
@@ -312,7 +345,7 @@ def test_buff_pickup_reward(engine):
 def test_phase_12_weights(engine):
     """Phase 1.2 has P1.1 rewards halved and P1.2 rewards at full."""
     p11 = Phase1Reward({"phase": 1.1, "reward_approach": 0, "penalty_retreat": 0,
-                        "penalty_center_dev": 0, "penalty_wall": 0, "penalty_blocked": 0,
+                        "reward_center": 0, "penalty_wall": 0, "penalty_blocked": 0,
                         "penalty_illegal_bomb_cap": 0,
                         "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0,
                         "penalty_death_self": 0, "penalty_death_opp": 0,
@@ -322,7 +355,7 @@ def test_phase_12_weights(engine):
                         "reward_destroy_brick_side": 0, "penalty_bomb_wasted": 0,
                         "reward_pickup_normal": 0, "reward_pickup_unknown": 0})
     p12 = Phase1Reward({"phase": 1.2, "reward_approach": 0, "penalty_retreat": 0,
-                        "penalty_center_dev": 0, "penalty_wall": 0, "penalty_blocked": 0,
+                        "reward_center": 0, "penalty_wall": 0, "penalty_blocked": 0,
                         "penalty_illegal_bomb_cap": 0,
                         "penalty_illegal_ignite": 0, "penalty_illegal_dir": 0,
                         "penalty_death_self": 1.0, "penalty_death_opp": 0.5,
