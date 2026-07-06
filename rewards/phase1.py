@@ -10,8 +10,8 @@ from rewards import RewardFunction
 
 class Phase1Reward(RewardFunction):
     _DEFAULT_CFG = {
-        "reward_approach": 4.0, "penalty_retreat": 0.04,
-        "penalty_center_dev": 0.013,
+        "reward_approach": 4.0, "penalty_retreat": 0.40,
+        "penalty_center_dev": 0.33,
         "penalty_stall_threshold": 30, "penalty_stall_init": 0.007, "penalty_stall_cap": 0.00167,
         "penalty_wall": 0.003,
         "reward_survive": 0.0,

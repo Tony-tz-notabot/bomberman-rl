@@ -220,3 +220,4 @@
 - [x] **梯度距离奖励 + 去掉存活惩罚 + batch_size 128 (commit 5e773e2)** — 分析日志发现 3 次 update 后 policy 全零（logits 接近随机初始化）。修改三项：(1) `_approach_and_retreat` 替换为 `_distance_gradient`，去掉 10 帧窗口，每帧按距离变化直接给奖励，reward_approach 从 0.231 提升到 2.0；(2) 去掉 Phase 1.1 的 `-0.002/帧` 生存惩罚（站立不动=0）；(3) batch_size 256→128，梯度步数翻倍（每 update 320→640 次）。15 个 phase1 测试 + 全量 203 测试通过。Push 到 GitHub。
 - [x] **argmax 替代 >0.5 阈值用于确定性评估 (commit f1f3272)** — 修复确定性评估全零问题。`model.predict(deterministic=True)` 使用 BernoulliDistribution.mode() 逐维 round(sigmoid(logit)>0.5)，初始化 logits ~ O(0.01) 时一次 PPO update 即可将全部 logits 推负 → 输出全零。新增 `_argmax_action()` 函数用 `torch.argmax(logits)` 选最高 logit 维度输出 one-hot，保证始终至少一个动作。移除旧的对向键惩罚计数器（argmax 保证不存在对向键）。25 测试通过。
 - [x] **翻倍接近/后退奖励 (commit 8826070)** — reward_approach 2.0→4.0, penalty_retreat 0.02→0.04。接近信号现在是碰墙惩罚的 ~130 倍。
+- [x] **关闭评估视频录制** — `configs/phase1_fast.yaml` video_episodes 2→0。节省评估时间。

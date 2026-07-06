@@ -34,7 +34,7 @@ phases:
 evaluation:
   interval: 25000
   episodes: 10
-  video_episodes: 2
+  video_episodes: 0
   deterministic: true
 
 composite_score:

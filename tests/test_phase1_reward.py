@@ -120,8 +120,8 @@ def test_center_deviation_off_center(engine, p1_reward):
     snap = _take_snap(engine)
     action = np.zeros(6, dtype=np.int8)
     reward = p1_reward(engine, prev, snap, action, "red")
-    # Center dev: -0.013 * (10/20)² = -0.00325, plus survival 0.0
-    assert reward == pytest.approx(-0.003, abs=0.001)
+    # Center dev: -0.33 * (10/20)² = -0.0825, plus survival 0.0
+    assert reward == pytest.approx(-0.083, abs=0.001)
 
 
 def test_stall_penalty(engine, p1_reward):
