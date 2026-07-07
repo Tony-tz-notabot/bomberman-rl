@@ -98,28 +98,41 @@ class Phase1Reward(RewardFunction):
     def _center_deviation(self, player, is_approaching: bool = False) -> float:
         """Reward for staying near corridor centerline while approaching opponent.
 
-        When approaching (distance to opponent decreasing): full reward_center rate.
-        When idle/retreating: small reward_center_idle rate (avoids "stand still" attractor).
+        Three-segment curve:
+          0 → safe_zone/2:  1.0 → 0.9  (inner, shallow drop)
+          safe_zone/2 → safe_zone:  0.9 → 0.1  (edge, sharp drop)
+          safe_zone → outer:  0.1 → 0.0  (outside safe, gentle tail)
 
-        Safe zone = (CELL_SIZE * (1 - PLAYER_HITBOX_SIZE)) / 2 = 8px.
-        Linear reward from center (max) to safe_zone edge (0).
-        Cross intersections (odd,odd): uses max(X,Y) — both axes must be centered.
+        safe_zone = (CELL_SIZE × (1 - HITBOX_SIZE)) / 2 = 8px.
+        outer = CELL_SIZE / 2 = 20px (cell edge).
+
+        When approaching: rate = reward_center (0.03).
+        When idle/retreating: rate = reward_center_idle (0.005).
+        Cross intersections (odd,odd): uses max(X,Y).
         """
         gx, gy = player.grid_x, player.grid_y
         if gx % 2 == 0 and gy % 2 == 0:
             return 0.0
         cx, cy = grid_center(gx, gy)
         safe_zone = (cfg.CELL_SIZE * (1.0 - cfg.PLAYER_HITBOX_SIZE)) / 2.0  # 8px
+        outer = cfg.CELL_SIZE / 2.0  # 20px cell edge
         if gx % 2 == 1 and gy % 2 == 1:
             dev = max(abs(player.pos_x - cx), abs(player.pos_y - cy))
         elif gy % 2 == 1:
             dev = abs(player.pos_y - cy)
         else:
             dev = abs(player.pos_x - cx)
-        if dev >= safe_zone:
+        if dev >= outer:
             return 0.0
-        coeff = self.cfg["reward_center"] if is_approaching else self.cfg["reward_center_idle"]
-        return coeff * (1.0 - dev / safe_zone)
+        half = safe_zone / 2.0
+        if dev <= half:
+            coeff = 1.0 - 0.1 * (dev / half)  # 1.0 → 0.9
+        elif dev <= safe_zone:
+            coeff = 0.9 - 0.8 * (dev - half) / half  # 0.9 → 0.1
+        else:
+            coeff = 0.1 * (1.0 - (dev - safe_zone) / (outer - safe_zone))  # 0.1 → 0.0
+        rate = self.cfg["reward_center"] if is_approaching else self.cfg["reward_center_idle"]
+        return rate * coeff
 
     def _stall(self, gx, gy) -> float:
         """40-frame rolling heatmap: stalled if distinct grid cells ≤ 2."""

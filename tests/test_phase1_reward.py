@@ -152,8 +152,8 @@ def test_center_reward_partial(engine):
     engine.blue_player.pos_x = 650
     snap = _take_snap(engine)
     reward = rw(engine, prev, snap, action, "red")
-    # Approaching at 4px off: 0.03 * (1 - 4/8) = 0.015
-    assert reward == pytest.approx(0.015, abs=0.001)
+    # Approaching at 4px (safe_zone/2): coeff = 1.0 - 0.1*(4/4) = 0.9, 0.03*0.9 = 0.027
+    assert reward == pytest.approx(0.027, abs=0.001)
 
 
 def test_center_reward_outside_safe_zone(engine):
@@ -174,8 +174,8 @@ def test_center_reward_outside_safe_zone(engine):
     engine.blue_player.pos_x = 650
     snap = _take_snap(engine)
     reward = rw(engine, prev, snap, action, "red")
-    # Outside safe zone = 0 reward
-    assert reward == pytest.approx(0.0, abs=0.001)
+    # At 12px (safe_zone+4): coeff=0.1*(1-4/12)=0.0667, 0.03*0.0667=0.002
+    assert reward == pytest.approx(0.002, abs=0.001)
 
 
 def test_center_reward_idle(engine):
