@@ -11,7 +11,7 @@ from rewards import RewardFunction
 class Phase1Reward(RewardFunction):
     _DEFAULT_CFG = {
         "reward_approach": 4.0, "penalty_retreat": 0.40,
-        "reward_center": 0.02,
+        "reward_center": 0.02, "reward_center_stationary": 0.005,
         "penalty_stall_threshold": 30, "penalty_stall_init": 0.007, "penalty_stall_cap": 0.00167,
         "penalty_wall": 0.003,
         "reward_survive": 0.0,
@@ -57,7 +57,7 @@ class Phase1Reward(RewardFunction):
         reward = 0.0
         reward += w["p11"] * self._survival(curr_self.alive)
         reward += w["p11"] * self._distance_gradient(fdist)
-        reward += w["p11"] * self._center_deviation(curr_self)
+        reward += w["p11"] * self._center_deviation(curr_self, fdist)
         reward += w["p11"] * self._stall(gx, gy)
         reward += w["p11"] * self._wall_collision(action[:4], prev_self, curr_self)
         reward += w["p11"] * self._illegal_action(action[4], action[5], action[:4], prev_self, curr_self)
@@ -94,18 +94,18 @@ class Phase1Reward(RewardFunction):
                 return self.cfg["penalty_retreat"] * diff  # negative (diff < 0)
         return 0.0
 
-    def _center_deviation(self, player) -> float:
-        """Reward for staying near corridor centerline (avoids wall collisions).
+    def _center_deviation(self, player, fdist) -> float:
+        """Reward for staying near corridor centerline.
 
-        Safe zone = half the clearance between player hitbox and walls:
-          (CELL_SIZE * (1 - PLAYER_HITBOX_SIZE)) / 2
-        = (40 * 0.4) / 2 = 8px.
+        Safe zone = (CELL_SIZE * (1 - PLAYER_HITBOX_SIZE)) / 2 = 8px.
 
-        Within safe_zone: linear reward from max at center to 0 at edge.
-        Outside safe_zone: 0 (player is already scraping walls).
+        Two rates:
+          - Actively approaching opponent (fdist < _prev_fdist): full linear reward
+            [reward_center] * (1 - dev / safe_zone), max +0.02 at center.
+          - Stationary or retreating: flat small reward [reward_center_stationary],
+            giving a weak corridor-centering hint without creating a "stand still" attractor.
 
-        At cross intersections (gx odd, gy odd): uses max(X,Y) deviation,
-        requiring both axes to be centered.
+        At cross intersections (gx odd, gy odd): uses max(X,Y) deviation.
         """
         gx, gy = player.grid_x, player.grid_y
         if gx % 2 == 0 and gy % 2 == 0:
@@ -120,7 +120,10 @@ class Phase1Reward(RewardFunction):
             dev = abs(player.pos_x - cx)  # vertical corridor: X deviation
         if dev >= safe_zone:
             return 0.0
-        return self.cfg["reward_center"] * (1.0 - dev / safe_zone)
+        # Full reward only when actively moving toward opponent
+        if self._prev_fdist is not None and fdist < self._prev_fdist:
+            return self.cfg["reward_center"] * (1.0 - dev / safe_zone)
+        return self.cfg["reward_center_stationary"]
 
     def _stall(self, gx, gy) -> float:
         """40-frame rolling heatmap: stalled if distinct grid cells ≤ 2."""
